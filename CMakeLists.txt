@@ -155,11 +155,11 @@ add_dependencies(laundry_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPOR
  )
 
 
- add_executable(serial_test src/serial_test.cpp)
- add_dependencies(serial_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
- target_link_libraries(serial_test
-   ${catkin_LIBRARIES}
- )
+# add_executable(serial_test src/serial_test.cpp)
+# add_dependencies(serial_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+# target_link_libraries(serial_test
+#   ${catkin_LIBRARIES}
+# )
 
 #############
 ## Install ##
