@@ -7,10 +7,7 @@
 #include <gtk/gtk.h>
 #include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/Int32.h>
-#include <RasPiDS3.hpp>
 #include "raspi_laundry/PrintStatus.h"
-
-#define DS3 false
 
 constexpr char status_msg[][100] = {
     {"<span foreground='orange' size='160000' weight='ultrabold'>停止中</span>"},
@@ -23,7 +20,8 @@ constexpr char status_msg[][100] = {
     {"<span foreground='green' size='115000' weight='ultrabold'>竿の間に移動</span>"},
     {"<span foreground='green' size='115000' weight='ultrabold'>ホームへ移動</span>"},
     {"<span foreground='red' size='160000' weight='ultrabold'>警告</span>"},
-    {"<span foreground='green' size='160000' weight='ultrabold'>展開動作</span>"}
+    {"<span foreground='green' size='160000' weight='ultrabold'>展開動作</span>"},
+    {"<span foreground='green' size='160000' weight='ultrabold'>収納動作</span>"}
 };
 
 constexpr char coat_msg[2][100] = {
@@ -96,50 +94,89 @@ GtkWidget* data_text[25];//input上でデータを表示する
 std_msgs::Float32MultiArray move_data;
 ros::Publisher *move_pub;
 ros::Publisher mdd;
+ros::Publisher operation;
 char label_name[200];//sprintfのための変数
-bool spreaded = false;
-bool coat = false;//0:赤　1:青
-bool fight = false;//0:予選 1:決勝
 bool skip = false;
 bool auto_move = false;
 bool warn = false;
 bool towel[2] = {true,true};
 bool seats[2] = {true,true};
-bool stm_auto = false;
 bool lock = false;
 bool ready = false;
 bool manual_move = false;
-bool manual_sheet = false;
 bool only_move = false;
+bool coat,fight;
+bool spreaded = false;
 bool spread_move[2] = {false,false};
-bool loop_ok = true;
 int stm_status = 0;
-int status = 0;
-int next_move = 0;
 int warn_count = 0;
 double manual_v_x = 0,manual_v_y = 0,manual_omega = 0;
 double goal_x,goal_y,goal_yaw;
 double now_v_x,now_v_y,now_omega;
 double now_x,now_y,now_yaw,theta;
-#if DS3
-RPDS3::DualShock3 controller;
-#endif
 
 inline double constrain(double x,double a,double b){
         return (x < a ? a : x > b ? b : x );
 }
 
 void button_click(GtkWidget* widget,gpointer data);
-inline void autoMove();
 inline void sendSerial(uint8_t id,uint8_t cmd,int16_t data,ros::Publisher &pub);
 inline void cmdnum(double cmd,double x,double y,double omega);
 inline void cmd1(int data);
-inline void set_auto(double x,double y,double yaw);
-inline void spreadMove();
-inline void lowerMove();
-inline void hangTowel(bool bath);
-inline void sheetStart();
-inline void sheetEnd();
+
+void changeText(const raspi_laundry::PrintStatus &data){
+    sprintf(label_name,"<span foreground='black' size='70000' weight='ultrabold'>ステータス:%d  次:%d</span>",data.status,data.next);
+    gtk_label_set_markup(GTK_LABEL(status_num),label_name);
+    sprintf(label_name,"%s%s",coat_msg[data.coat],fight_msg[data.fight]);
+    gtk_label_set_markup(GTK_LABEL(COAT),label_name);
+    gtk_label_set_markup(GTK_LABEL(move_mode[0]),move_msg[0][data.towel1]);
+    gtk_label_set_markup(GTK_LABEL(move_mode[1]),move_msg[1][data.towel2]);
+    if(!only_move){
+        gtk_label_set_markup(GTK_LABEL(move_mode[2]),move_msg[2][data.seat]);
+        seats[0] = data.seat;
+        seats[1] = seats[0];
+    }
+    towel[0] = data.towel1;
+    towel[1] = data.towel2;
+    coat = data.coat;
+    fight = data.fight;
+    gtk_label_set_text(GTK_LABEL(data_text[11]),bool_name[data.spreaded]);
+    spreaded = data.spreaded;
+    switch (data.status) {
+        case 1:
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[7]);
+            break;
+        case 3://展開動作
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);
+            break;
+        case 5://バスタオルを干す位置に移動する
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[4]);
+            break;
+        case 7://バスタオルかける
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
+            break;
+        case 9:
+            //干し始め位置へ移動
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[3]);
+            break;
+        case 11:
+        case 14://干し終わり動作
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
+            break;
+        case 15://帰れる位置に移動する
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[7]);
+            break;
+        case 16://帰り準備
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[11]);
+            break;
+        case 17://スタートゾーンへ戻る
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[8]);
+            break;
+        case 19:
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
+            break;
+    }
+}
 
 void getData(const std_msgs::Float32MultiArray &place){
     static int i,j;
@@ -183,115 +220,14 @@ static void ros_main(int argc,char **argv){
     ros::NodeHandle nh;
     ros::Rate loop_rate(LOOP_RATE);
     ros::Subscriber place = nh.subscribe("place",100,getData);
-    ros::Publisher moter = nh.advertise<std_msgs::Float32MultiArray>("motor",100);
+    ros::Subscriber gui_status = nh.subscribe("Print_Status",100,changeText);
     mdd = nh.advertise<std_msgs::Int32>("Motor_Serial",100);
-    move_pub = &moter;
-#if DS3
-    controller.yReverseSet(true);
-#endif
-    int count = 0;
-    int num = 0;
-    int last_status,last_next;
-    double speed = 2;
-    bool zero = false;
-    bool moter4 = false;
-    bool last_towel[2];
+    operation = nh.advertise<std_msgs::Float32MultiArray>("Operation",100);
     bool last_seats[2];
-    bool bath = false;
+    bool zero = true;
     ROS_INFO("Laundry Node start");
-    while(ros::ok()
-#if DS3
-            && !(controller.button(RPDS3::START) && controller.button(RPDS3::RIGHT))
-#endif
-         ){
-#if DS3
-        controller.update();
-        if(controller.button(RPDS3::R1)){
-            if(controller.press(RPDS3::SELECT)){
-                cmd1(-1);
-                sendSerial(15,255,0,mdd);
-            }
-            if(controller.press(RPDS3::UP)){
-                sendSerial(15,4,100,mdd);
-                moter4 = true;
-            }else if(controller.press(RPDS3::DOWN)){
-                sendSerial(15,4,-100,mdd);
-                moter4 = true;
-            }else if(controller.release(RPDS3::UP) || controller.release(RPDS3::DOWN)){
-                sendSerial(15,4,0,mdd);
-                if(moter4){
-                    sendSerial(15,4,0,mdd);
-                    moter4 = false;
-                }else{
-                    sendSerial(15,2,0,mdd);
-                }
-            }
-        }else{
-            if(controller.press(RPDS3::SELECT)){
-                cmd1(-2);
-                sendSerial(15,255,0,mdd);
-            }
-            if(controller.press(RPDS3::UP)){
-                sendSerial(15,2,100,mdd);
-            }else if(controller.press(RPDS3::DOWN)){
-                sendSerial(15,2,-100,mdd);
-            }else if(controller.release(RPDS3::UP) || controller.release(RPDS3::DOWN)){
-                if(moter4){
-                    sendSerial(15,4,0,mdd);
-                    moter4 = false;
-                }else{
-                    sendSerial(15,2,0,mdd);
-                }
-            }
-        }
-
-        if(controller.press(RPDS3::RIGHT) && !controller.button(RPDS3::START)){
-            sendSerial(15,3,100,mdd);
-        }else if(controller.press(RPDS3::LEFT)){
-            sendSerial(15,3,-100,mdd);
-        }else if(controller.release(RPDS3::LEFT) || controller.release(RPDS3::RIGHT)){
-            sendSerial(15,3,0,mdd);
-        }
-
-        if(controller.press(RPDS3::SQUARE)){//ソレノイド
-            sendSerial(1,9,1,mdd);
-        }else if(controller.release(RPDS3::SQUARE)){
-            sendSerial(1,9,-1,mdd);
-        }
-        if(controller.press(RPDS3::CIRCLE)){
-            sendSerial(15,9,2,mdd);
-        }else if(controller.release(RPDS3::CIRCLE)){
-            sendSerial(15,9,-2,mdd);
-        }
-        if(controller.press(RPDS3::TRIANGLE)){
-            sendSerial(15,10,1,mdd);
-        }else if(controller.release(RPDS3::TRIANGLE)){
-            sendSerial(15,10,-1,mdd);
-        }
-
-        if(controller.press(RPDS3::L1)){
-            speed = 1;
-        }else if(controller.release(RPDS3::L1)){
-            speed = 2;
-        }
-        double left_x = controller.stick(RPDS3::LEFT_X);
-        double left_y = controller.stick(RPDS3::LEFT_Y);
-        double left_t = controller.stick(RPDS3::LEFT_T);
-        double right_t = controller.stick(RPDS3::RIGHT_T);
-        manual_v_x = 2*speed*left_x;
-        manual_v_y = 2*speed*left_y;
-        manual_omega = speed*(left_t - right_t)/300;
-#endif
-        if(auto_move){
-            if(stm_auto){
-                if(stm_status == 0){
-                    auto_move = false;
-                    status = next_move;
-                }
-            }else{
-                autoMove();
-            }
-        }else if(manual_move){
+    while(ros::ok()){
+        if(manual_move){//マニュアル移動 用修正
             if(manual_v_x != 0 || manual_v_y != 0 || manual_omega != 0){
                 if(!zero){
                     zero = true;
@@ -316,177 +252,11 @@ static void ros_main(int argc,char **argv){
             if(warn){
                 ROS_INFO("CONNECTED TO STM32");
                 button_click(NULL,GINT_TO_POINTER(7));
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
                 warn = false;
             }
         }
-        switch (status) {
-            case 0:
-                break;
-            case 1:
-                if(fabs(now_x) >= 1500 && fabs(now_y) > 5200){
-                    status = 3;
-                    break;
-                }
-                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[7]);
-                stm_auto = false;
-                cmdnum(5,coat,VMAX[spreaded],AMAX[spreaded]);
-                set_auto(point[0][coat][0],point[0][coat][1],point[0][coat][2]);
-                status = 2;//pixyを使わない時
-                next_move = 2;
-                break;
-            case 2://ポール間に移動
-                if(now_y > 5700){
-                    stm_auto = false;
-                    cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
-                    set_auto(point[1][coat][0],point[1][coat][1],point[1][coat][2]);
-                    next_move = 3;
-                    status = 0;//pixyを使わない時
-                }
-                break;
-            case 3://展開動作
-                if(fabs(now_x) < 1400){
-                    break;
-                }
-                if(spreaded){
-                    status = 4;
-                }else{
-                    spreadMove();
-                }
-                break;
-            case 4://次の動き選択
-                if(towel[0]){
-                    status = 5;//タオル１
-                    bath = false;
-                }else if(towel[1]){
-                    status = 5;//タオル２
-                    bath = true;
-                }else if(seats[0]){
-                    status = 9;//シーツ始め
-                }else{
-                    status = 15;//帰る
-                }
-                break;
-            case 5://バスタオルを干す位置に移動する
-                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[4]);
-                stm_auto = false;
-                num = 4+2*bath+fight;
-                set_auto(point[num][coat][0],point[num][coat][1],point[num][coat][2]);
-                status = 6;
-                break;
-            case 6://移動補正
-                status = 0;
-                next_move = 7;
-                break;
-            case 7://バスタオルかける
-                if(towel[bath]){
-                    hangTowel(bath);
-                }else{
-                    status = 8;
-                }
-                break;
-            case 8://次の動きの選択
-                if(bath){
-                    if(seats[0]){
-                        status = 9;//シーツ
-                    }else{
-                        status = 15;//帰る
-                    }
-                }else{
-                    if(towel[1]){
-                        bath = true;
-                        status = 5;//タオル２
-                    }else if(seats[0]){
-                        status = 9;//シーツ
-                    }else{
-                        status = 15;//帰る
-                    }
-                }
-                break;
-            case 9:
-                //干し始め位置へ移動
-                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[3]);
-                stm_auto = false;
-                set_auto(point[2][coat][0],point[2][coat][1],point[2][coat][2]);
-                status = 10;
-                break;
-            case 10://補正動作
-                next_move = 11;
-                status = 0;
-                break;
-            case 11:
-                //干し準備
-                if(seats[0]){
-                    sheetStart();
-                }else{
-                    status = 12;
-                }
-                break;
-            case 12://干し終わり位置まで移動
-                stm_auto = false;
-                set_auto(point[3][coat][0],point[3][coat][1],point[3][coat][2]);
-                status = 13;
-                break;
-            case 13://補正動作
-                next_move = 14;
-                status = 0;
-                break;
-            case 14://干し終わり動作
-                if(seats[1]){
-                    sheetEnd();
-                }else{
-                    status = 15;
-                }
-                break;
-            case 15://帰れる位置に移動する
-                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[7]);
-                stm_auto = false;
-                cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
-                set_auto(point[1][coat][0],point[1][coat][1],point[1][coat][2]);
-                next_move = 16;
-                status = 0;
-                break;
-            case 16://帰り準備
-                if(spreaded){
-                    lowerMove();
-                }else{
-                    status = 17;
-                }
-                break;
-            case 17://スタートゾーンへ戻る
-                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[8]);
-                stm_auto = false;
-                cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
-                set_auto(0,NOMAL_Y,0);
-                status = 18;
-                next_move = 18;
-                break;
-            case 18:
-                if(fabs(now_x) < 400){
-                    stm_auto = false;
-                    cmdnum(5,coat,VMAX[spreaded],AMAX[spreaded]);
-                    set_auto(0,0,0);
-                    next_move = 19;
-                    status = 0;
-                }
-                break;
-            case 19:
-                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
-                cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
-                status = 0;
-                next_move = 0;
-                break;
-        }
-        if(last_status != status || last_next != next_move){
-            sprintf(label_name,"<span foreground='black' size='70000' weight='ultrabold'>ステータス:%d  次:%d</span>",status,next_move);
-            gtk_label_set_markup(GTK_LABEL(status_num),label_name);
-            gtk_label_set_text(GTK_LABEL(data_text[11]),bool_name[spreaded]);
-            last_status = status;
-            last_next = next_move;
-            ROS_INFO("status : %d\tnext : %d",status,next_move);
-            ROS_INFO("now(%f,%f,%f)",now_x,now_y,now_yaw);
-            ROS_INFO("goal(%f,%f,%f)", goal_x,goal_y,goal_yaw);
-        }
-        if(manual_sheet){
+        if(only_move){
             if(seats[0] != last_seats[0]){
                 last_seats[0] = seats[0];
                 gtk_label_set_markup(GTK_LABEL(move_mode[2]),move_msg[5][seats[0]]);
@@ -495,20 +265,6 @@ static void ros_main(int argc,char **argv){
                 last_seats[1] = seats[1];
                 gtk_label_set_markup(GTK_LABEL(move_mode[3]),move_msg[6][seats[1]]);
             }
-        }else{
-            if(seats[0] != last_seats[0] || seats[1] != last_seats[1]){
-                last_seats[0] = seats[0];
-                last_seats[1] = seats[1];
-                gtk_label_set_markup(GTK_LABEL(move_mode[2]),move_msg[2][seats[0] || seats[1]]);
-            }
-        }
-        if(towel[0] != last_towel[0]){
-            last_towel[0] = towel[0];
-            gtk_label_set_markup(GTK_LABEL(move_mode[0]),move_msg[0][towel[0]]);
-        }
-        if(towel[1] != last_towel[1]){
-            last_towel[1] = towel[1];
-            gtk_label_set_markup(GTK_LABEL(move_mode[1]),move_msg[1][towel[1]]);
         }
         ros::spinOnce();
         loop_rate.sleep();
@@ -518,156 +274,64 @@ static void ros_main(int argc,char **argv){
     exit(0);
 }
 
-inline void spreadMove(){
-    static int count;
-    gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);
-    while(ros::ok() && loop_ok){
-        if(count < 60){//ダミー動作
-            count++;
-        }else{
-            count = 0;
-            spreaded = true;
-            break;
-        }
-        ros::spinOnce();
-    }
-}
-
-inline void lowerMove(){
-    static int count;
-    gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);
-    while(ros::ok() && loop_ok){
-        if(count < 60){//ダミー動作
-            count++;
-        }else{
-            count = 0;
-            spreaded = false;
-            break;
-        }
-        ros::spinOnce();
-    }
-}
-
-inline void hangTowel(bool bath){
-    static int count;
-    gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
-    while(ros::ok() && loop_ok){
-        if(count < 60){//ダミー動作
-            count++;
-        }else{
-            count = 0;
-            towel[bath] = false;
-            break;
-        }
-        ros::spinOnce();
-    }
-}
-
-inline void sheetStart(){
-    static int count;
-    gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
-    while(ros::ok() && loop_ok){
-        if(count < 60){//ダミー動作
-            count++;
-        }else{
-            count = 0;
-            seats[0] = false;
-            break;
-        }
-        ros::spinOnce();
-    }
-}
-
-inline void sheetEnd(){
-    static int count;
-    gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
-    while(ros::ok() && loop_ok){
-        if(count < 60){//ダミー動作
-            count++;
-        }else{
-            count = 0;
-            seats[1] = false;
-            break;
-        }
-        ros::spinOnce();
-    }
-}
-
 void button_click(GtkWidget* widget,gpointer data){
     switch (GPOINTER_TO_INT(data)) {
         case 0://コート切り替え
             if(!lock){
                 coat = !coat;
-                sprintf(label_name,"%s%s",coat_msg[coat],fight_msg[fight]);
-                gtk_label_set_markup(GTK_LABEL(COAT),label_name);
+                cmdnum(12,coat,fight,0);
             }
             break;
         case 1://予選・決勝切り替え
             if(!lock){
                 fight = !fight;
-                sprintf(label_name,"%s%s",coat_msg[coat],fight_msg[fight]);
-                gtk_label_set_markup(GTK_LABEL(COAT),label_name);
+                cmdnum(12,coat,fight,0);
             }
             break;
         case 2://キャリブレーション
             lock = true;
             cmd1(-1);
-            gtk_label_set_markup(GTK_LABEL(move_mode[3+manual_sheet]),move_msg[3][lock]);
+            gtk_label_set_markup(GTK_LABEL(move_mode[3+only_move]),move_msg[3][lock]);
             break;
         case 3://タオル１
             if(!ready){
                 towel[0] = !towel[0];
+                cmdnum(11,towel[0],towel[1],seats[0]);
             }
             break;
         case 4://タオル２
             if(!ready){
                 towel[1] = !towel[1];
+                cmdnum(11,towel[0],towel[1],seats[0]);
             }
             break;
         case 5://シーツ
             if(!ready){
                 seats[0] = !seats[0];
-                if(!manual_sheet){
+                cmdnum(11,towel[0],towel[1],seats[0]);
+                if(!only_move){
                     seats[1] = seats[0];
                 }
             }
             break;
         case 6://スタート
-            if(manual_sheet){
+            manual_move = false;
+            gtk_label_set_markup(GTK_LABEL(move_mode[4+only_move]),move_msg[4][manual_move]);
+            ready = true;
+            if(only_move){
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[5]);
-                manual_move = false;
-                gtk_label_set_markup(GTK_LABEL(move_mode[4+manual_sheet]),move_msg[4][manual_move]);
-                ready = true;
-                only_move = true;
             }else{
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[2]);
-                manual_move = false;
-                gtk_label_set_markup(GTK_LABEL(move_mode[4+manual_sheet]),move_msg[4][manual_move]);
-                ready = true;
-                only_move = false;
             }
             break;
         case 7://ストップ
             gtk_label_set_markup(GTK_LABEL(tips),tips_msg[3]);
             cmd1(-2);
-            if(auto_move){
-                skip = true;
-            }
-            status = 0;
-            next_move = 0;
             ready = false;
             break;
         case 8://リセット
-            status = 0;
-            next_move = 0;
-            if(auto_move){
-                skip = true;
-            }
             ready = false;
-            towel[0] = true;
-            towel[1] = true;
-            seats[0] = true;
-            cmd1(-2);
+            cmd1(-6);
             gtk_label_set_markup(GTK_LABEL(tips),tips_msg[0]);
             gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
             break;
@@ -676,39 +340,37 @@ void button_click(GtkWidget* widget,gpointer data){
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[1]);
                 ready = false;
                 if(only_move){
-                    loop_ok = true;
-                    if(towel[0]){
-                        hangTowel(0);
-                    }else if(towel[1]){
-                        hangTowel(1);
-                    }else if(seats[0]){
-                        sheetStart();
-                    }else if(seats[1]){
-                        sheetEnd();
+                    if(towel[0]){//タオルノード起動(1)
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
+                    }else if(towel[1]){//タオルノード起動(2)
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
+                    }else if(seats[0]){//シーツはじめの動き
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
+                    }else if(seats[1]){//シーツ終わりの動き
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
                     }else if(spread_move[0] && !spreaded){
-                        spread_move[0] = false;
-                        spreadMove();
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);
+                        spread_move[0] = false;//展開動作
                     }else if(spread_move[1] && spreaded){
-                        spread_move[1] = false;
-                        lowerMove();
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[11]);
+                        spread_move[1] = false;//収納動作
                     }
                     gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
-                    only_move = false;
                 }else{
-                    status = 1;
+                    cmd1(-5);
                 }
             }
             break;
         case 10://ロック解除
             lock = false;
-            gtk_label_set_markup(GTK_LABEL(move_mode[3+manual_sheet]),move_msg[3][lock]);
+            gtk_label_set_markup(GTK_LABEL(move_mode[3+only_move]),move_msg[3][lock]);
             break;
         case 11://手動操作
             manual_move = !manual_move;
-            gtk_label_set_markup(GTK_LABEL(move_mode[4+manual_sheet]),move_msg[4][manual_move]);
+            gtk_label_set_markup(GTK_LABEL(move_mode[4+only_move]),move_msg[4][manual_move]);
             break;
         case 12://シーツ終わり
-            if(!ready && manual_sheet){
+            if(!ready && only_move){
                 seats[1] = !seats[1];
             }
             break;
@@ -735,20 +397,10 @@ void entryInput(GtkWidget* widget,gpointer data){
         yaw = atof(temp);
         printf("%d : %lf %lf %lf\n",cmd,x,y,yaw);
         switch (cmd) {
-            case 10:
-                status = (int)x;
-                next_move = (int)y;
-                spreaded = (bool)yaw;
-                break;
-            case 11:
-                towel[0] = (bool)x;
-                towel[1] = (bool)y;
-                seats[0] = (bool)yaw;
-                break;
-            case 12:
+            case 20:
                 button_click(widget,GINT_TO_POINTER((int)x));
                 break;
-            case 20:
+            case 21:
                 sendSerial((int)x,(int)y,(int)yaw,mdd);
                 break;
             case 30:
@@ -761,30 +413,12 @@ void entryInput(GtkWidget* widget,gpointer data){
                 move_data.data[1] = x;
                 move_data.data[2] = y;
                 move_data.data[3] = yaw;
-                move_pub->publish(move_data);
+                operation.publish(move_data);
                 break;
         }
     }else{
-        if(cmd == -6){
-            towel[0] = true;
-            towel[1] = true;
-            seats[0] = true;
-        }else if(cmd == -5){
-            status = 1;
-        }else if(cmd == -1){
-            next_move = 0;
-            status = 0;
-            if(auto_move){
-                skip = true;
-            }
-            cmd1(-1);
-        }else if(cmd == -2){
-            if(auto_move){
-                skip = true;
-            }
-            cmd1(-2);
-        }else if(cmd == -7 && !manual_sheet){
-            manual_sheet = true;
+        if(cmd == -7 && !only_move){
+            only_move = true;
             gtk_button_set_label(GTK_BUTTON(sheet_on),"シーツかけ始め(J)");
             sheet_off = gtk_button_new_with_label("シーツかけ終わり(K)");
             gtk_box_pack_start(GTK_BOX(hbox_sheet),sheet_off,true,true,0);
@@ -803,8 +437,8 @@ void entryInput(GtkWidget* widget,gpointer data){
                 gtk_box_pack_start(GTK_BOX(hbox_move),move_mode[i],true,true,0);
             }
             gtk_widget_show_all(window);
-        }else if(cmd == -8 && manual_sheet){
-            manual_sheet = false;
+        }else if(cmd == -8 && only_move){
+            only_move = false;
             gtk_button_set_label(GTK_BUTTON(sheet_on),"シーツ(J)");
             gtk_button_set_label(GTK_BUTTON(start),"スタート(B)");
             gtk_widget_destroy(sheet_off);
@@ -824,7 +458,8 @@ void entryInput(GtkWidget* widget,gpointer data){
             exit(0);
         }else{
             move_data.data.resize(1);
-            move_pub->publish(move_data);
+            move_data.data[0] = cmd;
+            operation.publish(move_data);
         }
         x = 0;
         y = 0;
@@ -950,7 +585,6 @@ int main(int argc, char **argv){
     GtkWidget* yaw_label = gtk_label_new("Yaw");
 
     GtkWidget* send = gtk_button_new_with_label("送る");//input上のボタン
-    GtkWidget* run = gtk_button_new_with_label("実行");
 
     GtkWidget* vbox;//描画補助ボックス
     GtkWidget* hbox;
@@ -1100,11 +734,7 @@ int main(int argc, char **argv){
     gtk_box_pack_start(GTK_BOX(vbox),Gyaw,true,true,0);
     gtk_box_pack_start(GTK_BOX(hbox),vbox,true,true,0);
 
-    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
-    gtk_widget_set_size_request(hbox,150,50);
-    gtk_box_pack_start(GTK_BOX(hbox),send,true,true,0);
-    gtk_box_pack_start(GTK_BOX(hbox),run,true,true,0);
-    gtk_box_pack_start(GTK_BOX(vbigbox),hbox,true,true,0);
+    gtk_box_pack_start(GTK_BOX(vbigbox),send,true,true,0);
 
     data_flame[0] = gtk_frame_new("now_x");
     data_flame[1] = gtk_frame_new("now_y");
@@ -1158,7 +788,6 @@ int main(int argc, char **argv){
     gtk_box_pack_start(GTK_BOX(hbigbox),vbox,true,true,0);
 
     g_signal_connect(send,"clicked",G_CALLBACK(entryInput),NULL);
-    g_signal_connect(run,"clicked",G_CALLBACK(button_click),GINT_TO_POINTER(9));
 
     gtk_widget_show_all(window);
     gtk_widget_show_all(input);
@@ -1170,96 +799,6 @@ int main(int argc, char **argv){
     gtk_loop.join();
 
     return 0;
-}
-
-inline void autoMove(){
-    constexpr double A_MAX_LOOP[2] = {AMAX[0] / LOOP_RATE,AMAX[1] / LOOP_RATE};
-    constexpr double Kp  = 1.4; //自動移動
-    constexpr double Ki  = 0.0004;
-    constexpr double Kd  = 0.0006;
-    static double send_v_x,send_v_y,send_omega;
-    static double pid_v_x,pid_v_y,pid_omega;
-    static double diff_x,diff_y,diff_yaw;
-    static double errer_x,errer_y,errer_omega;
-    if(move_data.data.size() != 4){
-        move_data.data.resize(4);
-    }
-    if(move_data.data[0] != 0){
-        move_data.data[0] = 0;
-    }
-    diff_x = goal_x - now_x;
-    diff_y = goal_y - now_y;
-    diff_yaw = goal_yaw - now_yaw;
-    pid_v_x = constrain(diff_x * Kp + errer_x * Ki - now_v_x * Kd,-VMAX[spreaded],VMAX[spreaded]);
-    if(fabs(pid_v_x) >= fabs(send_v_x)){
-        if(fabs(send_v_x - pid_v_x) > A_MAX_LOOP[spreaded]){
-            send_v_x += (pid_v_x >= 0 ? 1 : -1)*A_MAX_LOOP[spreaded];
-        }else{
-            send_v_x = pid_v_x;
-        }
-    }else{
-        send_v_x = pid_v_x;
-        errer_x += diff_x / LOOP_RATE;
-    }
-    pid_v_y = constrain(diff_y * Kp + errer_y * Ki - now_v_y * Kd,-VMAX[spreaded],VMAX[spreaded]);
-    if(fabs(pid_v_y) >= fabs(send_v_y)){
-        if(fabs(send_v_y - pid_v_y) > A_MAX_LOOP[spreaded]){
-            send_v_y += (pid_v_y >= 0 ? 1 : -1)*A_MAX_LOOP[spreaded];
-        }else{
-            send_v_y = pid_v_y;
-        }
-    }else{
-        send_v_y = pid_v_y;
-        errer_y += diff_y / LOOP_RATE;
-    }
-    pid_omega = constrain(-diff_yaw / 60 + errer_omega / 5000 - now_omega / 5000,-0.9,0.9);
-    if(fabs(pid_omega) >= fabs(send_omega)){
-        if(fabs(send_omega - pid_omega) > 0.05){
-            send_omega += (pid_omega >= 0 ? 1 : -1)*0.05;
-        }else{
-            send_omega = pid_omega;
-        }
-    }else{
-        send_omega = pid_omega;
-        errer_omega += -diff_yaw / LOOP_RATE;
-    }
-    if((fabs(diff_x) < 5 && fabs(diff_y) < 5 && fabs(diff_yaw) < 1
-                && fabs(now_v_x) < 15 && fabs(now_v_y) < 15 && fabs(now_omega) < 0.02) || skip){
-        send_v_x = 0;
-        send_v_y = 0;
-        send_omega = 0;
-        errer_x = 0;
-        errer_y = 0;
-        errer_omega = 0;
-        status = next_move;
-        skip = false;
-        auto_move = false;
-        ROS_INFO("autoMove Fin");
-    }
-    move_data.data[1] = send_v_x;
-    move_data.data[2] = send_v_y;
-    move_data.data[3] = send_omega;
-    move_pub->publish(move_data);
-}
-
-inline void set_auto(double x,double y,double yaw){
-    goal_x = x;
-    goal_y = y;
-    goal_yaw = yaw;
-    if(stm_auto){
-        if(move_data.data.size() != 4){
-            move_data.data.resize(4);
-        }
-        if(move_data.data[0] != 1){
-            move_data.data[0] = 1;
-        }
-        move_data.data[1] = x;
-        move_data.data[2] = y;
-        move_data.data[3] = yaw;
-        move_pub->publish(move_data);
-        ros::spinOnce();
-    }
-    auto_move = true;
 }
 
 inline void sendSerial(uint8_t id,uint8_t cmd,int16_t data,ros::Publisher &pub){
@@ -1279,7 +818,7 @@ inline void cmdnum(double cmd,double x,double y,double omega){
     move_data.data[1] = x;
     move_data.data[2] = y;
     move_data.data[3] = omega;
-    move_pub->publish(move_data);
+    operation.publish(move_data);
     ros::spinOnce();
 }
 
@@ -1290,6 +829,6 @@ inline void cmd1(int data){
     if(move_data.data[0] != data){
         move_data.data[0] = data;
     }
-    move_pub->publish(move_data);
+    operation.publish(move_data);
     ros::spinOnce();
 }
