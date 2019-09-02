@@ -65,6 +65,12 @@ constexpr char bool_name[2][10] = {
     {"true"}
 };
 
+constexpr char spread_name[3][20] = {
+    {"展開前"},
+    {"第一展開"},
+    {"第二展開"}
+};
+
 constexpr int LOOP_RATE  = 25;
 constexpr double AMAX[2] = {300,50}; // mm/s/s
 constexpr double VMAX[2] = {1500,250}; // mm/s
@@ -92,12 +98,12 @@ GtkWidget* hbox_move;
 GtkWidget* data_text[25];//input上でデータを表示する
 
 std_msgs::Float32MultiArray move_data;
+std_msgs::Int32 mechanism_data;
 ros::Publisher *move_pub;
 ros::Publisher mdd;
 ros::Publisher operation;
+ros::Publisher mechanism;
 char label_name[200];//sprintfのための変数
-bool skip = false;
-bool auto_move = false;
 bool warn = false;
 bool towel[2] = {true,true};
 bool seats[2] = {true,true};
@@ -106,89 +112,111 @@ bool ready = false;
 bool manual_move = false;
 bool only_move = false;
 bool coat,fight;
-bool spreaded = false;
+int spreaded = 0;
 bool spread_move[2] = {false,false};
 int stm_status = 0;
 int warn_count = 0;
+int wait_num = 0;
 double manual_v_x = 0,manual_v_y = 0,manual_omega = 0;
-double goal_x,goal_y,goal_yaw;
-double now_v_x,now_v_y,now_omega;
-double now_x,now_y,now_yaw,theta;
-
-inline double constrain(double x,double a,double b){
-        return (x < a ? a : x > b ? b : x );
-}
 
 void button_click(GtkWidget* widget,gpointer data);
 inline void sendSerial(uint8_t id,uint8_t cmd,int16_t data,ros::Publisher &pub);
 inline void cmdnum(double cmd,double x,double y,double omega);
 inline void cmd1(int data);
 
+void getResponse(const std_msgs::Int32 &data){
+    if(data.data == wait_num){
+        wait_num = 0;
+        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
+        switch (data.data){
+            case 1://タオル１
+                towel[0] = false;
+                break;
+            case 2://タオル２
+                towel[1] = false;
+                break;
+            case 3://シーツ始め
+                seats[0] = false;
+                break;
+            case 4://シーツ終わり
+                seats[1] = false;
+                break;
+            case 5://第一展開
+                spreaded = 1;
+                break;
+            case 6://第二展開
+                spreaded = 2;
+                break;
+            case 7://収納
+                spreaded = 0;
+                break;
+        }
+    }
+}
+
 void changeText(const raspi_laundry::PrintStatus &data){
+    static int last_status = 0;
+    char label_name[200];
     sprintf(label_name,"<span foreground='black' size='70000' weight='ultrabold'>ステータス:%d  次:%d</span>",data.status,data.next);
     gtk_label_set_markup(GTK_LABEL(status_num),label_name);
     sprintf(label_name,"%s%s",coat_msg[data.coat],fight_msg[data.fight]);
     gtk_label_set_markup(GTK_LABEL(COAT),label_name);
-    gtk_label_set_markup(GTK_LABEL(move_mode[0]),move_msg[0][data.towel1]);
-    gtk_label_set_markup(GTK_LABEL(move_mode[1]),move_msg[1][data.towel2]);
     if(!only_move){
+        gtk_label_set_markup(GTK_LABEL(move_mode[0]),move_msg[0][data.towel1]);
+        gtk_label_set_markup(GTK_LABEL(move_mode[1]),move_msg[1][data.towel2]);
         gtk_label_set_markup(GTK_LABEL(move_mode[2]),move_msg[2][data.seat]);
         seats[0] = data.seat;
-        seats[1] = seats[0];
+        seats[1] = false;
+        towel[0] = data.towel1;
+        towel[1] = data.towel2;
     }
-    towel[0] = data.towel1;
-    towel[1] = data.towel2;
     coat = data.coat;
     fight = data.fight;
-    gtk_label_set_text(GTK_LABEL(data_text[11]),bool_name[data.spreaded]);
+    gtk_label_set_text(GTK_LABEL(data_text[11]),spread_name[data.spreaded]);
     spreaded = data.spreaded;
-    switch (data.status) {
-        case 1:
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[7]);
-            break;
-        case 3://展開動作
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);
-            break;
-        case 5://バスタオルを干す位置に移動する
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[4]);
-            break;
-        case 7://バスタオルかける
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
-            break;
-        case 9:
-            //干し始め位置へ移動
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[3]);
-            break;
-        case 11:
-        case 14://干し終わり動作
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
-            break;
-        case 15://帰れる位置に移動する
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[7]);
-            break;
-        case 16://帰り準備
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[11]);
-            break;
-        case 17://スタートゾーンへ戻る
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[8]);
-            break;
-        case 19:
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
-            break;
+    if(data.status != last_status){
+        last_status = data.status;
+        switch (data.status) {
+            case 1:
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[7]);
+                break;
+            case 3://展開動作
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);
+                break;
+            case 5://バスタオルを干す位置に移動する
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[4]);
+                break;
+            case 7://バスタオルかける
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
+                break;
+            case 10:
+                //干し始め位置へ移動
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[3]);
+                break;
+            case 12:
+            case 15://干し終わり動作
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
+                break;
+            case 16://帰れる位置に移動する
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[7]);
+                break;
+            case 17://帰り準備
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[11]);
+                break;
+            case 18://スタートゾーンへ戻る
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[8]);
+                break;
+            case 20:
+                gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
+                break;
+        }
     }
 }
 
 void getData(const std_msgs::Float32MultiArray &place){
     static int i,j;
-    now_x = place.data[0];
-    now_y = place.data[1];
-    theta = place.data[2];
-    now_yaw = place.data[3];
-    now_v_x = place.data[4];
-    now_v_y = place.data[5];
-    now_omega = place.data[6];
-    stm_status = (int)place.data[7];
-    if(j > 20){
+    char label_name[100];
+    if(j > 10){
         j = 0;
         for(i = 0;i < 8;i++){
             sprintf(label_name,"%.4f",place.data[i]);
@@ -203,27 +231,17 @@ void getData(const std_msgs::Float32MultiArray &place){
 }
 
 static void ros_main(int argc,char **argv){
-    constexpr double NOMAL_Y = 5900;
-    constexpr double SEATS_Y = 6300;
-    constexpr double TOWEL_Y = 5500;
-    constexpr double point[8][2][3] = {//赤　青
-        {{0,NOMAL_Y,0},{0,NOMAL_Y,0}},//ポール間に入る前
-        {{1800,NOMAL_Y,0},{-1800,NOMAL_Y,0}},//ポール間に入る
-        {{1800,SEATS_Y,0},{-1800,SEATS_Y,0}},//シーツかけ始め
-        {{3700,SEATS_Y,0},{-3700,SEATS_Y,0}},//シーツかけ終わり
-        {{2750,TOWEL_Y,0},{-2750,TOWEL_Y,0}},//タオル１予選４2090
-        {{2090,TOWEL_Y,0},{-2090,TOWEL_Y,0}},//タオル１決勝 2180
-        {{3550,TOWEL_Y,0},{-3550,TOWEL_Y,0}},//タオル２予選６3300
-        {{3410,TOWEL_Y,0},{-3410,TOWEL_Y,0}}//タオル２決勝 3500
-    };
     ros::init(argc, argv, "laundry_node");
     ros::NodeHandle nh;
     ros::Rate loop_rate(LOOP_RATE);
     ros::Subscriber place = nh.subscribe("place",100,getData);
     ros::Subscriber gui_status = nh.subscribe("Print_Status",100,changeText);
+    ros::Subscriber mechanism_response = nh.subscribe("mechanism_response",100,getResponse);
     mdd = nh.advertise<std_msgs::Int32>("Motor_Serial",100);
     operation = nh.advertise<std_msgs::Float32MultiArray>("Operation",100);
+    mechanism = nh.advertise<std_msgs::Int32>("run_mechanism",100);
     bool last_seats[2];
+    bool last_towel[2];
     bool zero = true;
     ROS_INFO("Laundry Node start");
     while(ros::ok()){
@@ -265,6 +283,14 @@ static void ros_main(int argc,char **argv){
                 last_seats[1] = seats[1];
                 gtk_label_set_markup(GTK_LABEL(move_mode[3]),move_msg[6][seats[1]]);
             }
+            if(towel[0] != last_towel[0]){
+                last_towel[0] = towel[0];
+                gtk_label_set_markup(GTK_LABEL(move_mode[0]),move_msg[0][towel[0]]);
+            }
+            if(towel[1] != last_towel[1]){
+                last_towel[1] = towel[1];
+                gtk_label_set_markup(GTK_LABEL(move_mode[1]),move_msg[1][towel[1]]);
+            }
         }
         ros::spinOnce();
         loop_rate.sleep();
@@ -296,21 +322,43 @@ void button_click(GtkWidget* widget,gpointer data){
         case 3://タオル１
             if(!ready){
                 towel[0] = !towel[0];
-                cmdnum(11,towel[0],towel[1],seats[0]);
+                if(only_move){
+                    if(towel[0]){
+                        towel[1] = false;
+                        seats[0] = false;
+                        seats[1] = false;
+                    }
+                }else{
+                    cmdnum(11,towel[0],towel[1],seats[0]);
+                }
             }
             break;
         case 4://タオル２
             if(!ready){
                 towel[1] = !towel[1];
-                cmdnum(11,towel[0],towel[1],seats[0]);
+                if(only_move){
+                    if(towel[1]){
+                        towel[0] = false;
+                        seats[0] = false;
+                        seats[1] = false;
+                    }
+                }else{
+                    cmdnum(11,towel[0],towel[1],seats[0]);
+                }
             }
             break;
         case 5://シーツ
             if(!ready){
                 seats[0] = !seats[0];
-                cmdnum(11,towel[0],towel[1],seats[0]);
-                if(!only_move){
-                    seats[1] = seats[0];
+                if(only_move){
+                    if(seats[0]){
+                        towel[0] = false;
+                        towel[1] = false;
+                        seats[1] = false;
+                    }
+                }else{
+                    cmdnum(11,towel[0],towel[1],seats[0]);
+                    seats[1] = 0;
                 }
             }
             break;
@@ -326,14 +374,23 @@ void button_click(GtkWidget* widget,gpointer data){
             break;
         case 7://ストップ
             gtk_label_set_markup(GTK_LABEL(tips),tips_msg[3]);
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
             cmd1(-2);
             ready = false;
+            if(only_move){
+                mechanism_data.data = 0;
+                mechanism.publish(mechanism_data);
+            }
             break;
         case 8://リセット
             ready = false;
             cmd1(-6);
             gtk_label_set_markup(GTK_LABEL(tips),tips_msg[0]);
             gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
+            if(only_move){
+                mechanism_data.data = 0;
+                mechanism.publish(mechanism_data);
+            }
             break;
         case 9://コマンド実行
             if(ready){
@@ -342,12 +399,24 @@ void button_click(GtkWidget* widget,gpointer data){
                 if(only_move){
                     if(towel[0]){//タオルノード起動(1)
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
+                        wait_num = 1;
+                        mechanism_data.data = 1;
+                        mechanism.publish(mechanism_data);
                     }else if(towel[1]){//タオルノード起動(2)
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
+                        wait_num = 2;
+                        mechanism_data.data = 2;
+                        mechanism.publish(mechanism_data);
                     }else if(seats[0]){//シーツはじめの動き
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
+                        wait_num = 3;
+                        mechanism_data.data = 3;
+                        mechanism.publish(mechanism_data);
                     }else if(seats[1]){//シーツ終わりの動き
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[5]);
+                        wait_num = 4;
+                        mechanism_data.data = 4;
+                        mechanism.publish(mechanism_data);
                     }else if(spread_move[0] && !spreaded){
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);
                         spread_move[0] = false;//展開動作
@@ -355,7 +424,6 @@ void button_click(GtkWidget* widget,gpointer data){
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[11]);
                         spread_move[1] = false;//収納動作
                     }
-                    gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
                 }else{
                     cmd1(-5);
                 }
@@ -372,6 +440,11 @@ void button_click(GtkWidget* widget,gpointer data){
         case 12://シーツ終わり
             if(!ready && only_move){
                 seats[1] = !seats[1];
+                if(seats[1]){
+                    towel[0] = false;
+                    towel[1] = false;
+                    seats[0] = false;
+                }
             }
             break;
     }
@@ -453,6 +526,8 @@ void entryInput(GtkWidget* widget,gpointer data){
                 gtk_box_pack_start(GTK_BOX(hbox_move),move_mode[i],true,true,0);
             }
             gtk_widget_show_all(window);
+            mechanism_data.data = 0;
+            mechanism.publish(mechanism_data);
         }else if(cmd == -9){
             gtk_main_quit();
             exit(0);
@@ -767,11 +842,6 @@ int main(int argc, char **argv){
         gtk_container_add(GTK_CONTAINER(data_flame[i]),data_text[i]);
         gtk_widget_set_size_request(data_flame[i],130,40);
     }
-/*
-    gtk_widget_set_size_request(odometry,700,30);
-    gtk_widget_set_size_request(Pixy1,700,30);
-    gtk_widget_set_size_request(Pixy2,700,30);
-    gtk_widget_set_size_request(Camera,700,30);*/
 
     vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
     gtk_widget_set_size_request(vbox,650,200);
