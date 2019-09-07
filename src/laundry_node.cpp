@@ -113,7 +113,7 @@ bool manual_move = false;
 bool only_move = false;
 bool coat,fight;
 int spreaded = 0;
-bool spread_move[2] = {false,false};
+bool spread_move = 0;
 int stm_status = 0;
 int warn_count = 0;
 int wait_num = 0;
@@ -231,7 +231,7 @@ void getData(const std_msgs::Float32MultiArray &place){
 }
 
 static void ros_main(int argc,char **argv){
-    ros::init(argc, argv, "laundry_node");
+    ros::init(argc, argv, "gui_operator");
     ros::NodeHandle nh;
     ros::Rate loop_rate(LOOP_RATE);
     ros::Subscriber place = nh.subscribe("place",100,getData);
@@ -417,12 +417,16 @@ void button_click(GtkWidget* widget,gpointer data){
                         wait_num = 4;
                         mechanism_data.data = 4;
                         mechanism.publish(mechanism_data);
-                    }else if(spread_move[0] && !spreaded){
-                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);
-                        spread_move[0] = false;//展開動作
-                    }else if(spread_move[1] && spreaded){
-                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[11]);
-                        spread_move[1] = false;//収納動作
+                    }else if(spread_move > 0){
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);//展開動作
+                        wait_num = 5 + spread_move;
+                        mechanism_data.data = wait_num;
+                        mechanism.publish(mechanism_data);
+                    }else if(spread_move == 0){
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[11]);//収納動作
+                        wait_num = 7;
+                        mechanism_data.data = wait_num;
+                        mechanism.publish(mechanism_data);
                     }
                 }else{
                     cmd1(-5);
@@ -476,6 +480,8 @@ void entryInput(GtkWidget* widget,gpointer data){
             case 21:
                 sendSerial((int)x,(int)y,(int)yaw,mdd);
                 break;
+            case 22:
+                spread_move = (int)x;
             case 30:
                 gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[(int)x]);
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[(int)y]);
@@ -676,8 +682,8 @@ int main(int argc, char **argv){
     gtk_container_set_border_width(GTK_CONTAINER(window),10);
     gtk_widget_set_size_request(window,900,1080);
     g_signal_connect(window,"destroy",G_CALLBACK(quit_main),NULL);
-    g_signal_connect(G_OBJECT(window),"key-press-event",G_CALLBACK(key_press),NULL);
     g_signal_connect(G_OBJECT(window),"key-release-event",G_CALLBACK(key_release),NULL);
+    g_signal_connect(G_OBJECT(window),"key-press-event",G_CALLBACK(key_press),NULL);
 
     vbigbox = gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
     gtk_container_add(GTK_CONTAINER(window),vbigbox);
