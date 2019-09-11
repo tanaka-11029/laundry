@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   raspi_laundry
+  cs_connection
 )
 
 ## System dependencies are found with CMake's conventions

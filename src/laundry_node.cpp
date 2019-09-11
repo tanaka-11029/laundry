@@ -7,7 +7,9 @@
 #include <gtk/gtk.h>
 #include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/Int32.h>
+#include <std_msgs/Bool.h>
 #include "raspi_laundry/PrintStatus.h"
+#include "cs_connection/RsDataMsg.h"
 
 constexpr char status_msg[][100] = {
     {"<span foreground='orange' size='160000' weight='ultrabold'>停止中</span>"},
@@ -71,6 +73,13 @@ constexpr char spread_name[3][20] = {
     {"第二展開"}
 };
 
+constexpr char order_name[4][20] = {
+    {"指令なし"},
+    {"縮小指令"},
+    {"第一展開指令"},
+    {"第二展開指令"}
+};
+
 constexpr int LOOP_RATE  = 25;
 constexpr double AMAX[2] = {300,50}; // mm/s/s
 constexpr double VMAX[2] = {1500,250}; // mm/s
@@ -95,7 +104,7 @@ GtkWidget* start;
 GtkWidget* hbox_sheet;
 GtkWidget* hbox_move;
 
-GtkWidget* data_text[25];//input上でデータを表示する
+GtkWidget* data_text[20];//input上でデータを表示する
 
 std_msgs::Float32MultiArray move_data;
 std_msgs::Int32 mechanism_data;
@@ -113,7 +122,7 @@ bool manual_move = false;
 bool only_move = false;
 bool coat,fight;
 int spreaded = 0;
-bool spread_move = 0;
+int spread_move = 0;
 int stm_status = 0;
 int warn_count = 0;
 int wait_num = 0;
@@ -206,7 +215,7 @@ void changeText(const raspi_laundry::PrintStatus &data){
             case 18://スタートゾーンへ戻る
                 gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[8]);
                 break;
-            case 20:
+            case 21:
                 gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
                 break;
         }
@@ -219,7 +228,7 @@ void getData(const std_msgs::Float32MultiArray &place){
     if(j > 10){
         j = 0;
         for(i = 0;i < 8;i++){
-            sprintf(label_name,"%.4f",place.data[i]);
+            sprintf(label_name,"%f",place.data[i]);
             gtk_label_set_text(GTK_LABEL(data_text[i]),label_name);
         }
     }else{
@@ -230,6 +239,31 @@ void getData(const std_msgs::Float32MultiArray &place){
     }
 }
 
+void getRsmsg(const cs_connection::RsDataMsg &data){
+    char name[100];
+    static int j;
+    if(j > 10){
+        j = 0;
+        sprintf(label_name,"%d",data.x_distance);
+        gtk_label_set_text(GTK_LABEL(data_text[12]),label_name);
+        sprintf(label_name,"%f",data.y_distance);
+        gtk_label_set_text(GTK_LABEL(data_text[13]),label_name);
+        sprintf(label_name,"%d",data.z_distance);
+        gtk_label_set_text(GTK_LABEL(data_text[14]),label_name);
+    }else{
+        j++;
+    }
+}
+
+void getEmergency(const std_msgs::Bool &data){
+    button_click(NULL,GINT_TO_POINTER(7));
+    gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[data.data]);
+}
+
+void getStart(const std_msgs::Bool &data){
+    button_click(NULL,GINT_TO_POINTER(9));
+}
+
 static void ros_main(int argc,char **argv){
     ros::init(argc, argv, "gui_operator");
     ros::NodeHandle nh;
@@ -237,6 +271,8 @@ static void ros_main(int argc,char **argv){
     ros::Subscriber place = nh.subscribe("place",100,getData);
     ros::Subscriber gui_status = nh.subscribe("Print_Status",100,changeText);
     ros::Subscriber mechanism_response = nh.subscribe("mechanism_response",100,getResponse);
+    ros::Subscriber rs_sub = nh.subscribe("rs_msg",100,getRsmsg);
+    ros::Subscriber start_sub = nh.subscribe("start_switch",100,getStart);
     mdd = nh.advertise<std_msgs::Int32>("Motor_Serial",100);
     operation = nh.advertise<std_msgs::Float32MultiArray>("Operation",100);
     mechanism = nh.advertise<std_msgs::Int32>("run_mechanism",100);
@@ -417,12 +453,16 @@ void button_click(GtkWidget* widget,gpointer data){
                         wait_num = 4;
                         mechanism_data.data = 4;
                         mechanism.publish(mechanism_data);
-                    }else if(spread_move > 0){
+                    }else if(spread_move > 1){
+                        spread_move = 0;
+                        gtk_label_set_text(GTK_LABEL(data_text[15]),order_name[spread_move]);
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);//展開動作
                         wait_num = 5 + spread_move;
                         mechanism_data.data = wait_num;
                         mechanism.publish(mechanism_data);
-                    }else if(spread_move == 0){
+                    }else if(spread_move == 1){
+                        spread_move = 0;
+                        gtk_label_set_text(GTK_LABEL(data_text[15]),order_name[spread_move]);
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[11]);//収納動作
                         wait_num = 7;
                         mechanism_data.data = wait_num;
@@ -481,7 +521,9 @@ void entryInput(GtkWidget* widget,gpointer data){
                 sendSerial((int)x,(int)y,(int)yaw,mdd);
                 break;
             case 22:
-                spread_move = (int)x;
+                spread_move = (int)x;//展開司令
+                gtk_label_set_text(GTK_LABEL(data_text[15]),order_name[spread_move]);
+                break;
             case 30:
                 gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[(int)x]);
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[(int)y]);
@@ -588,7 +630,7 @@ void key_press(GtkWidget* widget,GdkEventKey *event,gpointer data){
         case 'r'://手動操作
             button_click(widget,GINT_TO_POINTER(11));
             break;
-        case 'k':
+        case 'k'://シーツ終わり
             button_click(widget,GINT_TO_POINTER(12));
             break;
         case 'v':
@@ -672,7 +714,7 @@ int main(int argc, char **argv){
     GtkWidget* vbigbox;
     GtkWidget* hbigbox;
 
-    GtkWidget* data_flame[25];
+    GtkWidget* data_flame[20];
 
     //GtkWidget* grid;//inputで使うグリッド
 
@@ -829,21 +871,17 @@ int main(int argc, char **argv){
     data_flame[9] = gtk_frame_new("pixy_end");
     data_flame[10] = gtk_frame_new("pixy_intersection");
     data_flame[11] = gtk_frame_new("spreaded");
-    data_flame[12] = gtk_frame_new("unused");
-    data_flame[13] = gtk_frame_new("unused");
-    data_flame[14] = gtk_frame_new("unused");
-    data_flame[15] = gtk_frame_new("unused");
+    data_flame[12] = gtk_frame_new("rs_x");
+    data_flame[13] = gtk_frame_new("rs_y");
+    data_flame[14] = gtk_frame_new("rs_z");
+    data_flame[15] = gtk_frame_new("展開司令");
     data_flame[16] = gtk_frame_new("unused");
     data_flame[17] = gtk_frame_new("unused");
     data_flame[18] = gtk_frame_new("unused");
     data_flame[19] = gtk_frame_new("unused");
     data_flame[20] = gtk_frame_new("unused");
-    data_flame[21] = gtk_frame_new("unused");
-    data_flame[22] = gtk_frame_new("unused");
-    data_flame[23] = gtk_frame_new("unused");
-    data_flame[24] = gtk_frame_new("unused");
-    for(int i = 0;i < 25;i++){
-        data_text[i] = gtk_label_new("0.0000");//input上でデータを表示する
+    for(int i = 0;i < 20;i++){
+        data_text[i] = gtk_label_new("0.000000");//input上でデータを表示する
         gtk_frame_set_shadow_type(GTK_FRAME(data_flame[i]),GTK_SHADOW_ETCHED_IN);
         gtk_container_add(GTK_CONTAINER(data_flame[i]),data_text[i]);
         gtk_widget_set_size_request(data_flame[i],130,40);
@@ -856,7 +894,7 @@ int main(int argc, char **argv){
         hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL,2);
         gtk_widget_set_size_request(hbox,650,40);
         gtk_box_pack_start(GTK_BOX(vbox),hbox,true,true,0);
-        for(int i = j*5;i < 5 + j*5;i++){
+        for(int i = j*4;i < 4 + j*4;i++){
             gtk_box_pack_start(GTK_BOX(hbox),data_flame[i],true,true,0);
         }
     }

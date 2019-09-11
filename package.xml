@@ -54,12 +54,16 @@
   <build_depend>std_msgs</build_depend>
   <build_depend>raspi_laundry</build_depend>
   <build_depend>raspi_laundry_containing_custom_msg</build_depend>
+  <build_depend>cs_connection</build_depend>
+  <build_depend>cs_connection_containing_custom_msg</build_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>raspi_laundry</exec_depend>
   <exec_depend>raspi_laundry_containing_custom_msg</exec_depend>
+  <exec_depend>cs_connection</exec_depend>
+  <exec_depend>cs_connection_containing_custom_msg</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
