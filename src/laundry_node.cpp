@@ -181,8 +181,6 @@ void changeText(const raspi_laundry::PrintStatus &data){
     }
     coat = data.coat;
     fight = data.fight;
-    gtk_label_set_text(GTK_LABEL(data_text[11]),spread_name[data.spreaded]);
-    spreaded = data.spreaded;
     if(data.status != last_status){
         last_status = data.status;
         switch (data.status) {
@@ -264,16 +262,22 @@ void getStart(const std_msgs::Bool &data){
     button_click(NULL,GINT_TO_POINTER(9));
 }
 
+void getSpread(const std_msgs::Int32 &data){
+    spreaded = (data.data >> 8) & 0xff;
+    gtk_label_set_text(GTK_LABEL(data_text[11]),spread_name[spreaded]);
+}
+
 static void ros_main(int argc,char **argv){
     ros::init(argc, argv, "gui_operator");
     ros::NodeHandle nh;
     ros::Rate loop_rate(LOOP_RATE);
     ros::Subscriber place = nh.subscribe("place",100,getData);
-    ros::Subscriber gui_status = nh.subscribe("Print_Status",100,changeText);
+    ros::Subscriber gui_status = nh.subscribe("print_status",100,changeText);
     ros::Subscriber mechanism_response = nh.subscribe("mechanism_response",100,getResponse);
     ros::Subscriber rs_sub = nh.subscribe("rs_msg",100,getRsmsg);
     ros::Subscriber start_sub = nh.subscribe("start_switch",100,getStart);
-    mdd = nh.advertise<std_msgs::Int32>("Motor_Serial",100);
+    ros::Subscriber spread_sub = nh.subscribe("mechanism_status",100,getSpread);
+    mdd = nh.advertise<std_msgs::Int32>("sotor_serial",100);
     operation = nh.advertise<std_msgs::Float32MultiArray>("Operation",100);
     mechanism = nh.advertise<std_msgs::Int32>("run_mechanism",100);
     bool last_seats[2];
