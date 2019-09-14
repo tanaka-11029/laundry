@@ -277,7 +277,7 @@ static void ros_main(int argc,char **argv){
     ros::Subscriber rs_sub = nh.subscribe("rs_msg",100,getRsmsg);
     ros::Subscriber start_sub = nh.subscribe("start_switch",100,getStart);
     ros::Subscriber spread_sub = nh.subscribe("mechanism_status",100,getSpread);
-    mdd = nh.advertise<std_msgs::Int32>("sotor_serial",100);
+    mdd = nh.advertise<std_msgs::Int32>("motor_serial",100);
     operation = nh.advertise<std_msgs::Float32MultiArray>("Operation",100);
     mechanism = nh.advertise<std_msgs::Int32>("run_mechanism",100);
     bool last_seats[2];
