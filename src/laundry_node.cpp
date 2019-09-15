@@ -80,7 +80,7 @@ constexpr char order_name[4][20] = {
     {"第二展開指令"}
 };
 
-constexpr int LOOP_RATE  = 25;
+constexpr int LOOP_RATE  = 10;
 constexpr double AMAX[2] = {300,50}; // mm/s/s
 constexpr double VMAX[2] = {1500,250}; // mm/s
 
@@ -121,7 +121,7 @@ bool ready = false;
 bool manual_move = false;
 bool only_move = false;
 bool coat,fight;
-int spreaded = 0;
+int spreaded = 3;
 int spread_move = 0;
 int stm_status = 0;
 int warn_count = 0;
@@ -165,11 +165,11 @@ void getResponse(const std_msgs::Int32 &data){
 
 void changeText(const raspi_laundry::PrintStatus &data){
     static int last_status = 0;
-    char label_name[200];
-    sprintf(label_name,"<span foreground='black' size='70000' weight='ultrabold'>ステータス:%d  次:%d</span>",data.status,data.next);
-    gtk_label_set_markup(GTK_LABEL(status_num),label_name);
-    sprintf(label_name,"%s%s",coat_msg[data.coat],fight_msg[data.fight]);
-    gtk_label_set_markup(GTK_LABEL(COAT),label_name);
+    static char label_name[2][200];
+    sprintf(label_name[0],"<span foreground='black' size='70000' weight='ultrabold'>ステータス:%d  次:%d</span>",data.status,data.next);
+    gtk_label_set_markup(GTK_LABEL(status_num),label_name[0]);
+    sprintf(label_name[1],"%s%s",coat_msg[data.coat],fight_msg[data.fight]);
+    gtk_label_set_markup(GTK_LABEL(COAT),label_name[1]);
     if(!only_move){
         gtk_label_set_markup(GTK_LABEL(move_mode[0]),move_msg[0][data.towel1]);
         gtk_label_set_markup(GTK_LABEL(move_mode[1]),move_msg[1][data.towel2]);
@@ -222,12 +222,12 @@ void changeText(const raspi_laundry::PrintStatus &data){
 
 void getData(const std_msgs::Float32MultiArray &place){
     static int i,j;
-    char label_name[100];
     if(j > 10){
         j = 0;
+        char label_name[8][20];
         for(i = 0;i < 8;i++){
-            sprintf(label_name,"%f",place.data[i]);
-            gtk_label_set_text(GTK_LABEL(data_text[i]),label_name);
+            sprintf(label_name[i],"%f",place.data[i]);
+            gtk_label_set_text(GTK_LABEL(data_text[i]),label_name[i]);
         }
     }else{
         j++;
@@ -238,16 +238,16 @@ void getData(const std_msgs::Float32MultiArray &place){
 }
 
 void getRsmsg(const cs_connection::RsDataMsg &data){
-    char name[100];
     static int j;
     if(j > 10){
         j = 0;
-        sprintf(label_name,"%d",data.x_distance);
-        gtk_label_set_text(GTK_LABEL(data_text[12]),label_name);
-        sprintf(label_name,"%f",data.y_distance);
-        gtk_label_set_text(GTK_LABEL(data_text[13]),label_name);
-        sprintf(label_name,"%d",data.z_distance);
-        gtk_label_set_text(GTK_LABEL(data_text[14]),label_name);
+        char name[3][20];
+        sprintf(name[0],"%d",data.x_distance);
+        gtk_label_set_text(GTK_LABEL(data_text[12]),name[0]);
+        sprintf(name[1],"%f",data.y_distance);
+        gtk_label_set_text(GTK_LABEL(data_text[13]),name[1]);
+        sprintf(name[2],"%d",data.z_distance);
+        gtk_label_set_text(GTK_LABEL(data_text[14]),name[2]);
     }else{
         j++;
     }
@@ -263,8 +263,11 @@ void getStart(const std_msgs::Bool &data){
 }
 
 void getSpread(const std_msgs::Int32 &data){
-    spreaded = (data.data >> 8) & 0xff;
-    gtk_label_set_text(GTK_LABEL(data_text[11]),spread_name[spreaded]);
+    static int spread = (data.data >> 8) & 0xff;
+    if(spread != spreaded){
+        spreaded = spread;
+        gtk_label_set_text(GTK_LABEL(data_text[11]),spread_name[spreaded]);
+    }
 }
 
 static void ros_main(int argc,char **argv){
@@ -274,7 +277,7 @@ static void ros_main(int argc,char **argv){
     ros::Subscriber place = nh.subscribe("place",100,getData);
     ros::Subscriber gui_status = nh.subscribe("print_status",100,changeText);
     ros::Subscriber mechanism_response = nh.subscribe("mechanism_response",100,getResponse);
-    ros::Subscriber rs_sub = nh.subscribe("rs_msg",100,getRsmsg);
+    //ros::Subscriber rs_sub = nh.subscribe("rs_msg",100,getRsmsg);
     ros::Subscriber start_sub = nh.subscribe("start_switch",100,getStart);
     ros::Subscriber spread_sub = nh.subscribe("mechanism_status",100,getSpread);
     mdd = nh.advertise<std_msgs::Int32>("motor_serial",100);
@@ -728,9 +731,9 @@ int main(int argc, char **argv){
     gtk_container_set_border_width(GTK_CONTAINER(window),10);
     gtk_widget_set_size_request(window,900,1080);
     g_signal_connect(window,"destroy",G_CALLBACK(quit_main),NULL);
-    g_signal_connect(G_OBJECT(window),"key-release-event",G_CALLBACK(key_release),NULL);
     g_signal_connect(G_OBJECT(window),"key-press-event",G_CALLBACK(key_press),NULL);
-
+    g_signal_connect(G_OBJECT(window),"key-release-event",G_CALLBACK(key_release),NULL);
+    
     vbigbox = gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
     gtk_container_add(GTK_CONTAINER(window),vbigbox);
 
