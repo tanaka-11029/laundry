@@ -7,6 +7,7 @@
 #include <gtk/gtk.h>
 #include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/Int32.h>
+#include <std_msgs/Int8.h>
 #include <std_msgs/Bool.h>
 #include "raspi_laundry/PrintStatus.h"
 #include "cs_connection/RsDataMsg.h"
@@ -80,7 +81,7 @@ constexpr char order_name[4][20] = {
     {"第二展開指令"}
 };
 
-constexpr int LOOP_RATE  = 10;
+constexpr int LOOP_RATE  = 20;
 constexpr double AMAX[2] = {300,50}; // mm/s/s
 constexpr double VMAX[2] = {1500,250}; // mm/s
 
@@ -121,6 +122,7 @@ bool ready = false;
 bool manual_move = false;
 bool only_move = false;
 bool coat,fight;
+bool emergency = false;
 int spreaded = 3;
 int spread_move = 0;
 int stm_status = 0;
@@ -151,13 +153,10 @@ void getResponse(const std_msgs::Int32 &data){
                 seats[1] = false;
                 break;
             case 5://第一展開
-                spreaded = 1;
                 break;
             case 6://第二展開
-                spreaded = 2;
                 break;
             case 7://収納
-                spreaded = 0;
                 break;
         }
     }
@@ -215,6 +214,7 @@ void changeText(const raspi_laundry::PrintStatus &data){
                 break;
             case 21:
                 gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
+                gtk_label_set_markup(GTK_LABEL(tips),tips_msg[0]);
                 break;
         }
     }
@@ -239,23 +239,26 @@ void getData(const std_msgs::Float32MultiArray &place){
 
 void getRsmsg(const cs_connection::RsDataMsg &data){
     static int j;
-    if(j > 10){
+    if(j > 4){
         j = 0;
         char name[3][20];
-        sprintf(name[0],"%d",data.x_distance);
+        sprintf(name[0],"%f",data.x_distance);
         gtk_label_set_text(GTK_LABEL(data_text[12]),name[0]);
         sprintf(name[1],"%f",data.y_distance);
         gtk_label_set_text(GTK_LABEL(data_text[13]),name[1]);
-        sprintf(name[2],"%d",data.z_distance);
+        sprintf(name[2],"%f",data.z_distance);
         gtk_label_set_text(GTK_LABEL(data_text[14]),name[2]);
     }else{
         j++;
     }
 }
 
-void getEmergency(const std_msgs::Bool &data){
-    button_click(NULL,GINT_TO_POINTER(7));
-    gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[data.data]);
+void getSwitch(const std_msgs::Int8 &data){
+    if(emergency != (data.data & 0x01)){
+        emergency = data.data & 0x01;
+        button_click(NULL,GINT_TO_POINTER(7));
+        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[emergency]);
+    }
 }
 
 void getStart(const std_msgs::Bool &data){
@@ -263,10 +266,23 @@ void getStart(const std_msgs::Bool &data){
 }
 
 void getSpread(const std_msgs::Int32 &data){
-    static int spread = (data.data >> 8) & 0xff;
-    if(spread != spreaded){
-        spreaded = spread;
+    //int spread = data.data >> 8;
+    //ROS_INFO("spread:%d\t%d\t%d",spread,data.data,data.data >> 8);
+    if((data.data >> 8) != spreaded){
+        spreaded = data.data >> 8;
         gtk_label_set_text(GTK_LABEL(data_text[11]),spread_name[spreaded]);
+    }
+}
+
+void getLidar(const std_msgs::Int32 &data){
+    static int i;
+    if(i > 30){
+        i = 0;
+        char name[20];
+        sprintf(name,"%d",data.data);
+        gtk_label_set_text(GTK_LABEL(data_text[16]),name);
+    }else{
+        i++;
     }
 }
 
@@ -277,9 +293,11 @@ static void ros_main(int argc,char **argv){
     ros::Subscriber place = nh.subscribe("place",100,getData);
     ros::Subscriber gui_status = nh.subscribe("print_status",100,changeText);
     ros::Subscriber mechanism_response = nh.subscribe("mechanism_response",100,getResponse);
-    //ros::Subscriber rs_sub = nh.subscribe("rs_msg",100,getRsmsg);
+    ros::Subscriber rs_sub = nh.subscribe("rs_msg",100,getRsmsg);
     ros::Subscriber start_sub = nh.subscribe("start_switch",100,getStart);
     ros::Subscriber spread_sub = nh.subscribe("mechanism_status",100,getSpread);
+    ros::Subscriber lidar_sub = nh.subscribe("lidar",100,getLidar);
+    ros::Subscriber switch_sub = nh.subscribe("switch",100,getSwitch);
     mdd = nh.advertise<std_msgs::Int32>("motor_serial",100);
     operation = nh.advertise<std_msgs::Float32MultiArray>("Operation",100);
     mechanism = nh.advertise<std_msgs::Int32>("run_mechanism",100);
@@ -882,7 +900,7 @@ int main(int argc, char **argv){
     data_flame[13] = gtk_frame_new("rs_y");
     data_flame[14] = gtk_frame_new("rs_z");
     data_flame[15] = gtk_frame_new("展開司令");
-    data_flame[16] = gtk_frame_new("unused");
+    data_flame[16] = gtk_frame_new("Lidar");
     data_flame[17] = gtk_frame_new("unused");
     data_flame[18] = gtk_frame_new("unused");
     data_flame[19] = gtk_frame_new("unused");
