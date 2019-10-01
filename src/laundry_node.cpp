@@ -81,7 +81,7 @@ constexpr char order_name[4][20] = {
     {"第二展開指令"}
 };
 
-constexpr int LOOP_RATE  = 20;
+constexpr int LOOP_RATE  = 10;
 constexpr double AMAX[2] = {300,50}; // mm/s/s
 constexpr double VMAX[2] = {1500,250}; // mm/s
 
@@ -139,6 +139,7 @@ void getResponse(const std_msgs::Int32 &data){
     if(data.data == wait_num){
         wait_num = 0;
         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
+        gtk_label_set_markup(GTK_LABEL(tips),tips_msg[0]);
         switch (data.data){
             case 1://タオル１
                 towel[0] = false;
@@ -222,9 +223,9 @@ void changeText(const raspi_laundry::PrintStatus &data){
 
 void getData(const std_msgs::Float32MultiArray &place){
     static int i,j;
+    static char label_name[8][20];
     if(j > 10){
         j = 0;
-        char label_name[8][20];
         for(i = 0;i < 8;i++){
             sprintf(label_name[i],"%f",place.data[i]);
             gtk_label_set_text(GTK_LABEL(data_text[i]),label_name[i]);
@@ -239,9 +240,9 @@ void getData(const std_msgs::Float32MultiArray &place){
 
 void getRsmsg(const cs_connection::RsDataMsg &data){
     static int j;
-    if(j > 4){
+    static char name[3][20];
+    if(j > 5){
         j = 0;
-        char name[3][20];
         sprintf(name[0],"%f",data.x_distance);
         gtk_label_set_text(GTK_LABEL(data_text[12]),name[0]);
         sprintf(name[1],"%f",data.y_distance);
@@ -276,9 +277,9 @@ void getSpread(const std_msgs::Int32 &data){
 
 void getLidar(const std_msgs::Int32 &data){
     static int i;
+    static char name[20];
     if(i > 30){
         i = 0;
-        char name[20];
         sprintf(name,"%d",data.data);
         gtk_label_set_text(GTK_LABEL(data_text[16]),name);
     }else{
@@ -431,6 +432,7 @@ void button_click(GtkWidget* widget,gpointer data){
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[5]);
             }else{
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[2]);
+                cmd1(-3);//ready信号
             }
             break;
         case 7://ストップ
