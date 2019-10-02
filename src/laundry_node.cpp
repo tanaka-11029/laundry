@@ -40,10 +40,11 @@ constexpr char fight_msg[2][100] = {
 constexpr char tips_msg[][200] = {
     {"<span foreground='black' size='70000' weight='ultrabold'>動作を設定して\nBキーを押して\nください。</span>"},
     {"<span foreground='black' size='70000' weight='ultrabold'>動作を完了するまで\nお待ちください。</span>"},
-    {"<span foreground='black' size='70000' weight='ultrabold'>全体動作待機中\nです。スペースキーを\n押してください。</span>"},
+    {"<span foreground='black' size='70000' weight='ultrabold'>全体動作待機中です。\nスペースキーを\n押してください。</span>"},
     {"<span foreground='black' size='70000' weight='ultrabold'>停止しました。\n再度動作を設定\nしてください。</span>"},
     {"<span foreground='black' size='70000' weight='ultrabold'>STM32からの信号を\n受信できません。</span>"},
     {"<span foreground='black' size='70000' weight='ultrabold'>機構のみ動作待機中\nです。スペースキーを\n押してください。</span>"},
+    {"<span foreground='black' size='70000' weight='ultrabold'>準備動作待機中です。\nスペースキーを\n押してください。</span>"}
 };
 
 constexpr char move_msg[7][2][100] = {
@@ -123,6 +124,7 @@ bool manual_move = false;
 bool only_move = false;
 bool coat,fight;
 bool emergency = false;
+bool setup_move = false;
 int spreaded = 3;
 int spread_move = 0;
 int stm_status = 0;
@@ -378,6 +380,7 @@ void button_click(GtkWidget* widget,gpointer data){
             break;
         case 2://キャリブレーション
             lock = true;
+            setup_move = false;
             cmd1(-1);
             gtk_label_set_markup(GTK_LABEL(move_mode[3+only_move]),move_msg[3][lock]);
             break;
@@ -447,6 +450,7 @@ void button_click(GtkWidget* widget,gpointer data){
             break;
         case 8://リセット
             ready = false;
+            setup_move = false;
             cmd1(-6);
             gtk_label_set_markup(GTK_LABEL(tips),tips_msg[0]);
             gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
@@ -459,7 +463,17 @@ void button_click(GtkWidget* widget,gpointer data){
             if(ready){
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[1]);
                 ready = false;
-                if(only_move){
+                if(setup_move){
+                    setup_move = false;
+                    sendSerial(1,2,1,mdd);
+                    if(spreaded != 1){
+                        gtk_label_set_text(GTK_LABEL(data_text[15]),order_name[spread_move]);
+                        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);//展開動作
+                        wait_num = 5;
+                        mechanism_data.data = wait_num;
+                        mechanism.publish(mechanism_data);
+                    }
+                }else if(only_move){
                     if(towel[0]){//タオルノード起動(1)
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[6]);
                         wait_num = 1;
@@ -517,6 +531,11 @@ void button_click(GtkWidget* widget,gpointer data){
                     seats[0] = false;
                 }
             }
+            break;
+        case 13://最初の準備動作
+            gtk_label_set_markup(GTK_LABEL(tips),tips_msg[6]);
+            setup_move = true;
+            ready = true;
             break;
     }
 }
@@ -721,6 +740,7 @@ int main(int argc, char **argv){
     GtkWidget* cali = gtk_button_new_with_label("キャリブレーション/決定(U)");
     GtkWidget* towel1 = gtk_button_new_with_label("タオル１(G)");
     GtkWidget* towel2 = gtk_button_new_with_label("タオル２(H)");
+    GtkWidget* setup = gtk_button_new_with_label("準備動作(V)");
     start = gtk_button_new_with_label("スタート(B)");
     GtkWidget* stop = gtk_button_new_with_label("停止(N)");
     GtkWidget* reset = gtk_button_new_with_label("始めに戻る(M)");
@@ -794,7 +814,12 @@ int main(int argc, char **argv){
     gtk_widget_set_size_request(vbox,300,200);
     gtk_box_pack_start(GTK_BOX(vbox),coat_mode,true,true,0);
     gtk_box_pack_start(GTK_BOX(vbox),towel1,true,true,0);
-    gtk_box_pack_start(GTK_BOX(vbox),start,true,true,0);
+
+    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
+    gtk_box_pack_start(GTK_BOX(hbox),setup,true,true,0);
+    gtk_box_pack_start(GTK_BOX(hbox),start,true,true,0);
+
+    gtk_box_pack_start(GTK_BOX(vbox),hbox,true,true,0);
     gtk_box_pack_start(GTK_BOX(hbigbox),vbox,true,true,0);
 
 
@@ -843,6 +868,7 @@ int main(int argc, char **argv){
     g_signal_connect(unlock,"clicked",G_CALLBACK(button_click),GINT_TO_POINTER(10));
     g_signal_connect(manual,"clicked",G_CALLBACK(button_click),GINT_TO_POINTER(11));
     g_signal_connect(sheet_off,"clicked",G_CALLBACK(button_click),GINT_TO_POINTER(12));
+    g_signal_connect(setup,"clicked",G_CALLBACK(button_click),GINT_TO_POINTER(13));
 
     input = gtk_window_new(GTK_WINDOW_TOPLEVEL);//inputの描画
     gtk_window_set_position(GTK_WINDOW(input),GTK_WIN_POS_CENTER);
