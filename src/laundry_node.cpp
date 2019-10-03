@@ -6,7 +6,9 @@
 #include <thread>
 #include <gtk/gtk.h>
 #include <std_msgs/Float32MultiArray.h>
+#include <std_msgs/Int64.h>
 #include <std_msgs/Int32.h>
+#include <std_msgs/Int16.h>
 #include <std_msgs/Int8.h>
 #include <std_msgs/Bool.h>
 #include "raspi_laundry/PrintStatus.h"
@@ -268,7 +270,7 @@ void getStart(const std_msgs::Bool &data){
     button_click(NULL,GINT_TO_POINTER(9));
 }
 
-void getSpread(const std_msgs::Int32 &data){
+void getSpread(const std_msgs::Int16 &data){
     //int spread = data.data >> 8;
     //ROS_INFO("spread:%d\t%d\t%d",spread,data.data,data.data >> 8);
     if((data.data >> 8) != spreaded){
@@ -277,13 +279,15 @@ void getSpread(const std_msgs::Int32 &data){
     }
 }
 
-void getLidar(const std_msgs::Int32 &data){
+void getLidar(const std_msgs::Int64 &data){
     static int i;
-    static char name[20];
+    static char name[2][20];
     if(i > 30){
         i = 0;
-        sprintf(name,"%d",data.data);
-        gtk_label_set_text(GTK_LABEL(data_text[16]),name);
+        sprintf(name[0],"%ld",data.data & 0xffffffff);
+        gtk_label_set_text(GTK_LABEL(data_text[16]),name[0]);
+        sprintf(name[1],"%ld",data.data >> 32);
+        gtk_label_set_text(GTK_LABEL(data_text[17]),name[1]);
     }else{
         i++;
     }
@@ -928,8 +932,8 @@ int main(int argc, char **argv){
     data_flame[13] = gtk_frame_new("rs_y");
     data_flame[14] = gtk_frame_new("rs_z");
     data_flame[15] = gtk_frame_new("展開司令");
-    data_flame[16] = gtk_frame_new("Lidar");
-    data_flame[17] = gtk_frame_new("unused");
+    data_flame[16] = gtk_frame_new("Lidar_X");
+    data_flame[17] = gtk_frame_new("Lidar_Y");
     data_flame[18] = gtk_frame_new("unused");
     data_flame[19] = gtk_frame_new("unused");
     data_flame[20] = gtk_frame_new("unused");
