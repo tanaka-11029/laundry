@@ -261,8 +261,10 @@ void getRsmsg(const cs_connection::RsDataMsg &data){
 void getSwitch(const std_msgs::Int8 &data){
     if(emergency != (data.data & 0x01)){
         emergency = data.data & 0x01;
-        button_click(NULL,GINT_TO_POINTER(7));
-        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[emergency]);
+        if(emergency){
+            //button_click(NULL,GINT_TO_POINTER(7));
+            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[emergency]);
+        }
     }
 }
 
@@ -273,9 +275,16 @@ void getStart(const std_msgs::Bool &data){
 void getSpread(const std_msgs::Int16 &data){
     //int spread = data.data >> 8;
     //ROS_INFO("spread:%d\t%d\t%d",spread,data.data,data.data >> 8);
+    static int mechanism;
+    static char name[20];
     if((data.data >> 8) != spreaded){
         spreaded = data.data >> 8;
         gtk_label_set_text(GTK_LABEL(data_text[11]),spread_name[spreaded]);
+    }
+    if(mechanism != (data.data & 0xff)){
+        mechanism = data.data & 0xff;
+        sprintf(name,"%d",mechanism);
+        gtk_label_set_text(GTK_LABEL(data_text[18]),name);
     }
 }
 
@@ -286,7 +295,7 @@ void getLidar(const std_msgs::Int64 &data){
         i = 0;
         sprintf(name[0],"%ld",data.data & 0xffffffff);
         gtk_label_set_text(GTK_LABEL(data_text[16]),name[0]);
-        sprintf(name[1],"%ld",data.data >> 32);
+        sprintf(name[1],"%ld",(data.data >> 32) & 0xffffffff);
         gtk_label_set_text(GTK_LABEL(data_text[17]),name[1]);
     }else{
         i++;
@@ -469,7 +478,11 @@ void button_click(GtkWidget* widget,gpointer data){
                 ready = false;
                 if(setup_move){
                     setup_move = false;
-                    sendSerial(1,2,1,mdd);
+                    if(fight){
+                        sendSerial(1,2,1,mdd);
+                    }else{
+                        sendSerial(1,2,0,mdd);
+                    }
                     if(spreaded != 1){
                         gtk_label_set_text(GTK_LABEL(data_text[15]),order_name[spread_move]);
                         gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);//展開動作
@@ -934,7 +947,7 @@ int main(int argc, char **argv){
     data_flame[15] = gtk_frame_new("展開司令");
     data_flame[16] = gtk_frame_new("Lidar_X");
     data_flame[17] = gtk_frame_new("Lidar_Y");
-    data_flame[18] = gtk_frame_new("unused");
+    data_flame[18] = gtk_frame_new("機構");
     data_flame[19] = gtk_frame_new("unused");
     data_flame[20] = gtk_frame_new("unused");
     for(int i = 0;i < 20;i++){
