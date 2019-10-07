@@ -261,15 +261,15 @@ void getRsmsg(const cs_connection::RsDataMsg &data){
 void getSwitch(const std_msgs::Int8 &data){
     if(emergency != (data.data & 0x01)){
         emergency = data.data & 0x01;
-        if(emergency){
-            //button_click(NULL,GINT_TO_POINTER(7));
-            gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[emergency]);
-        }
+        //button_click(NULL,GINT_TO_POINTER(7));
+        gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[emergency]);
     }
 }
 
 void getStart(const std_msgs::Bool &data){
-    button_click(NULL,GINT_TO_POINTER(9));
+    if(!emergency){
+        button_click(NULL,GINT_TO_POINTER(9));
+    }
 }
 
 void getSpread(const std_msgs::Int16 &data){
@@ -291,7 +291,7 @@ void getSpread(const std_msgs::Int16 &data){
 void getLidar(const std_msgs::Int64 &data){
     static int i;
     static char name[2][20];
-    if(i > 30){
+    if(i > 20){
         i = 0;
         sprintf(name[0],"%ld",data.data & 0xffffffff);
         gtk_label_set_text(GTK_LABEL(data_text[16]),name[0]);
@@ -321,6 +321,8 @@ static void ros_main(int argc,char **argv){
     bool last_towel[2];
     bool zero = true;
     ROS_INFO("Laundry Node start");
+    ros::spinOnce();
+    cmd1(-4);
     while(ros::ok()){
         if(manual_move){//マニュアル移動 用修正
             if(manual_v_x != 0 || manual_v_y != 0 || manual_omega != 0){
@@ -553,6 +555,7 @@ void button_click(GtkWidget* widget,gpointer data){
             gtk_label_set_markup(GTK_LABEL(tips),tips_msg[6]);
             setup_move = true;
             ready = true;
+            cmd1(-6);
             break;
     }
 }
