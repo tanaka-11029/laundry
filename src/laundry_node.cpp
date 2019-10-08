@@ -23,7 +23,7 @@ constexpr char status_msg[][100] = {
     {"<span foreground='purple' size='115000' weight='ultrabold'>シーツ干し中</span>"},
     {"<span foreground='purple' size='115000' weight='ultrabold'>タオル干し中</span>"},
     {"<span foreground='green' size='115000' weight='ultrabold'>竿の間に移動</span>"},
-    {"<span foreground='green' size='115000' weight='ultrabold'>ホームへ移動</span>"},
+    {"<span foreground='LimeGreen' size='140000' weight='ultrabold'>動作終了</span>"},//ホームへ移動
     {"<span foreground='red' size='160000' weight='ultrabold'>警告</span>"},
     {"<span foreground='green' size='160000' weight='ultrabold'>展開動作</span>"},
     {"<span foreground='green' size='160000' weight='ultrabold'>収納動作</span>"}
