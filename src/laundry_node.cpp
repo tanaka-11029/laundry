@@ -245,7 +245,7 @@ void getData(const std_msgs::Float32MultiArray &place){
 void getRsmsg(const cs_connection::RsDataMsg &data){
     static int j;
     static char name[3][20];
-    if(j > 5){
+    if(j > 10){
         j = 0;
         sprintf(name[0],"%f",data.x_distance);
         gtk_label_set_text(GTK_LABEL(data_text[12]),name[0]);
@@ -312,7 +312,7 @@ static void ros_main(int argc,char **argv){
     ros::Subscriber rs_sub = nh.subscribe("rs_msg",100,getRsmsg);
     ros::Subscriber start_sub = nh.subscribe("start_switch",100,getStart);
     ros::Subscriber spread_sub = nh.subscribe("mechanism_status",100,getSpread);
-    ros::Subscriber lidar_sub = nh.subscribe("lidar",100,getLidar);
+    //ros::Subscriber lidar_sub = nh.subscribe("lidar",100,getLidar);
     ros::Subscriber switch_sub = nh.subscribe("switch",100,getSwitch);
     mdd = nh.advertise<std_msgs::Int32>("motor_serial",100);
     operation = nh.advertise<std_msgs::Float32MultiArray>("Operation",100);
