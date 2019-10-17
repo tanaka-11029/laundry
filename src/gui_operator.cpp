@@ -9,7 +9,7 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int8.h>
 #include <std_msgs/Bool.h>
-#include "raspi_laundry/PrintStatus.h"
+#include "laundry/PrintStatus.h"
 #include "cs_connection/RsDataMsg.h"
 
 constexpr char status_msg[][100] = {
@@ -142,7 +142,7 @@ void getResponse(const std_msgs::Int32 &data){
     }
 }
 
-void changeText(const raspi_laundry::PrintStatus &data){
+void changeText(const laundry::PrintStatus &data){
     static int last_status = 0,last_next = 0;
     static char label_name[2][200];
     static bool warn = false;

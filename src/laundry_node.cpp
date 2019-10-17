@@ -11,8 +11,8 @@
 #include <std_msgs/Int16.h>
 #include <std_msgs/Int8.h>
 #include <std_msgs/Bool.h>
-#include <raspi_laundry/PixyData.h>
-#include <raspi_laundry/PrintStatus.h>
+#include <laundry/PixyData.h>
+#include <laundry/PrintStatus.h>
 #include <cs_connection/RsDataMsg.h>
 
 #define DS3 false
@@ -23,7 +23,7 @@ constexpr int LOOP_RATE  = 25;
 constexpr double AMAX[3] = {600,600,150}; // mm/s/s
 constexpr double VMAX[3] = {1200,1200,500}; // mm/s
 std_msgs::Float32MultiArray move_data;
-raspi_laundry::PrintStatus send_status;
+laundry::PrintStatus send_status;
 ros::Publisher motor;
 ros::Publisher mechanism;
 ros::Publisher mdd;
@@ -221,7 +221,7 @@ int main(int argc,char **argv){
     motor = nh.advertise<std_msgs::Float32MultiArray>("motor",100);
     mdd = nh.advertise<std_msgs::Int32>("motor_serial",100);
     mechanism = nh.advertise<std_msgs::Int32>("run_mechanism",100);
-    ros::Publisher gui_status = nh.advertise<raspi_laundry::PrintStatus>("print_status",100);
+    ros::Publisher gui_status = nh.advertise<laundry::PrintStatus>("print_status",100);
     ros::Subscriber place = nh.subscribe("place",100,getData);
     ros::Subscriber operation = nh.subscribe("Operation",100,operate);
     ros::Subscriber mechanism_response = nh.subscribe("mechanism_response",100,getResponse);

@@ -1,10 +1,10 @@
 #include <iostream>
 #include <libpixyusb2.h>
 #include <ros/ros.h>
-#include <raspi_laundry/PixyData.h>
+#include <laundry/PixyData.h>
 
 Pixy2 pixy;
-raspi_laundry::PixyData pixy_data;
+laundry::PixyData pixy_data;
 bool enabled = true;
 
 void  get_line_features()
@@ -70,7 +70,7 @@ void  get_line_features()
     }
 }
 
-void getData(const raspi_laundry::PixyData &data){
+void getData(const laundry::PixyData &data){
     enabled = data.enabled;
     pixy.setLamp(data.lamp,0);
     pixy.setServos(data.servo_x,data.servo_y);
@@ -79,7 +79,7 @@ void getData(const raspi_laundry::PixyData &data){
 int main(int argc,char **argv){
     ros::init(argc,argv,"pixy2_node");
     ros::NodeHandle nh;
-    ros::Publisher pixy_pub = nh.advertise<raspi_laundry::PixyData>("pixy_data",100);
+    ros::Publisher pixy_pub = nh.advertise<laundry::PixyData>("pixy_data",100);
     ros::Subscriber set_mode = nh.subscribe("pixy_set",100,getData);
     ros::Rate loop_rate(100);
 

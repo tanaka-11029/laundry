@@ -11,7 +11,7 @@
 #include <std_msgs/Int16.h>
 #include <std_msgs/Int8.h>
 #include <std_msgs/Bool.h>
-#include "raspi_laundry/PrintStatus.h"
+#include "laundry/PrintStatus.h"
 #include "cs_connection/RsDataMsg.h"
 
 constexpr char status_msg[][100] = {
