@@ -56,8 +56,10 @@
   <build_depend>raspi_laundry_containing_custom_msg</build_depend>
   <build_depend>cs_connection</build_depend>
   <build_depend>cs_connection_containing_custom_msg</build_depend>
+  <build_export_depend>message_generation</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
+  <exec_depend>message_generation</exec_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>raspi_laundry</exec_depend>

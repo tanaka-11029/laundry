@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(laundry)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
- add_compile_options(-std=c++14)
+ add_compile_options(-D__LINUX__ -std=c++14)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -11,7 +11,6 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   roscpp
   std_msgs
-  raspi_laundry
   cs_connection
 )
 
@@ -20,6 +19,8 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(PkgConfig)
 pkg_check_modules(gtk+-3.0 REQUIRED gtk+-3.0)
 #find_package(gtk+-3.0)
+
+pkg_check_modules(LIBUSB QUIET libusb-1.0)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -51,11 +52,13 @@ pkg_check_modules(gtk+-3.0 REQUIRED gtk+-3.0)
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
+ add_message_files(
+   FILES
+   PixyData.msg
+   PrintStatus.msg
 #   Message1.msg
 #   Message2.msg
-# )
+ )
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -72,10 +75,10 @@ pkg_check_modules(gtk+-3.0 REQUIRED gtk+-3.0)
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
-# )
+ generate_messages(
+   DEPENDENCIES
+   std_msgs
+ )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -107,9 +110,9 @@ pkg_check_modules(gtk+-3.0 REQUIRED gtk+-3.0)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-  LIBRARIES laundry
-  CATKIN_DEPENDS roscpp std_msgs
+  INCLUDE_DIRS include
+#  LIBRARIES laundry
+#  CATKIN_DEPENDS roscpp std_msgs
 #  DEPENDS system_lib
 )
 
@@ -121,9 +124,15 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
   include
+  include/Pixy2/
+  include/libpixyusb2/
+  include/common/
   ${catkin_INCLUDE_DIRS}
+  ${LIBUSB_INCLUDE_DIRS}
   ${gtk+-3.0_INCLUDE_DIRS}
 )
+
+add_library(pixy2usb STATIC include/libpixyusb2/libpixyusb2.cpp include/libpixyusb2/usblink.cpp include/libpixyusb2/util.cpp include/common/chirp.cpp)
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -138,7 +147,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
- add_executable(gui_operator src/gui_operator.cpp include/RasPiDS3.cpp)
+ add_executable(gui_operator src/gui_operator.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -161,6 +170,38 @@ add_dependencies(gui_display ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORT
 target_link_libraries(gui_display
   ${catkin_LIBRARIES}
   ${gtk+-3.0_LIBRARIES}
+)
+
+add_executable(${PROJECT_NAME}_node src/laundry_node.cpp include/RasPiDS3.cpp)
+add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(${PROJECT_NAME}_node
+  ${catkin_LIBRARIES}
+)
+
+add_executable(operator src/operator.cpp)
+add_dependencies(operator ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(operator
+  ${catkin_LIBRARIES}
+)
+
+add_executable(pixy2_node src/pixy2_node.cpp)
+add_dependencies(pixy2_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(pixy2_node
+  ${catkin_LIBRARIES}
+  pixy2usb
+  ${LIBUSB_LIBRARIES}
+)
+
+add_executable(dummy_publisher src/dummy_publisher.cpp)
+add_dependencies(dummy_publisher ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(dummy_publisher
+  ${catkin_LIBRARIES}
+)
+
+add_executable(move_mechanism src/move_mechanism.cpp)
+add_dependencies(move_mechanism ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(move_mechanism
+  ${catkin_LIBRARIES}
 )
 
 # add_executable(serial_test src/serial_test.cpp)

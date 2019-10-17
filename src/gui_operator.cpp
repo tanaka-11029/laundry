@@ -69,7 +69,7 @@ constexpr char lock_name[2][20] = {
     {"ロック解除(P)"}
 };
 
-constexpr int LOOP_RATE  = 20;
+constexpr int LOOP_RATE  = 10;
 constexpr double AMAX[2] = {300,50}; // mm/s/s
 constexpr double VMAX[2] = {1500,250}; // mm/s
 
@@ -311,43 +311,43 @@ void button_click(GtkWidget* widget,gpointer data){
             break;
         case 3://タオル１
             if(!ready){
-                towel[0] = !towel[0];
                 if(only_move){
+                    towel[0] = !towel[0];
                     if(towel[0]){
                         towel[1] = false;
                         seats[0] = false;
                         seats[1] = false;
                     }
                 }else{
-                    cmdnum(11,towel[0],towel[1],seats[0]);
+                    cmdnum(11,!towel[0],towel[1],seats[0]);
                 }
             }
             break;
         case 4://タオル２
             if(!ready){
-                towel[1] = !towel[1];
                 if(only_move){
+                    towel[1] = !towel[1];
                     if(towel[1]){
                         towel[0] = false;
                         seats[0] = false;
                         seats[1] = false;
                     }
                 }else{
-                    cmdnum(11,towel[0],towel[1],seats[0]);
+                    cmdnum(11,towel[0],!towel[1],seats[0]);
                 }
             }
             break;
         case 5://シーツ
             if(!ready){
-                seats[0] = !seats[0];
                 if(only_move){
+                    seats[0] = !seats[0];
                     if(seats[0]){
                         towel[0] = false;
                         towel[1] = false;
                         seats[1] = false;
                     }
                 }else{
-                    cmdnum(11,towel[0],towel[1],seats[0]);
+                    cmdnum(11,towel[0],towel[1],!seats[0]);
                 }
             }
             break;
