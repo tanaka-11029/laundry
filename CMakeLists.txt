@@ -172,9 +172,9 @@ target_link_libraries(gui_display
   ${gtk+-3.0_LIBRARIES}
 )
 
-add_executable(${PROJECT_NAME}_node src/laundry_node.cpp include/RasPiDS3.cpp)
-add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(${PROJECT_NAME}_node
+add_executable(main_controller src/main_controller.cpp include/RasPiDS3.cpp)
+add_dependencies(main_controller ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(main_controller
   ${catkin_LIBRARIES}
 )
 

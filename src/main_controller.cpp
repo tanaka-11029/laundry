@@ -262,7 +262,7 @@ int main(int argc,char **argv){
     fight = std::atoi(buf);
     ROS_INFO("fight : %d",fight);
     ROS_INFO("laundry_node start");
-    sprintf(filename,"/home/tanaka/2019robocon/src/raspi_laundry/log/%d_%d_%d:%d.txt",local_time->tm_mon+1,local_time->tm_mday,local_time->tm_hour,local_time->tm_min);
+    sprintf(filename,"/home/tanaka/2019robocon/src/laundry/log/%d_%d_%d:%d.txt",local_time->tm_mon+1,local_time->tm_mday,local_time->tm_hour,local_time->tm_min);
     fp = fopen(filename,"w");
     if(fp == nullptr){
         ROS_ERROR("faild to open log file");
@@ -378,7 +378,8 @@ int main(int argc,char **argv){
         }
         if(auto_move){
             if(stm_auto){
-                if(stm_status == 0){
+                if(stm_status == 0 || skip){
+                    cmd1(-2);
                     auto_move = false;
                     if(wait_num == 0){
                         status = next_move;
@@ -480,7 +481,7 @@ int main(int argc,char **argv){
                 if(bath == 0){
                     setAuto(point[num][coat][0],point[num][coat][1],point[num][coat][2]);
                 }else{
-                    setAuto(point[num][coat][0],NOMAL_Y,0);                    
+                    setAuto(point[num][coat][0],NOMAL_Y,0); 
                 }
                 now_t = time(nullptr);
                 fprintf(fp,"バスタオル%d補正前 lidar(%d,%d) RS_Y:%d,X:%d\tnow(%f,%f,%f)\t%ld\n",bath+1,lidar_x,lidar_y,(int)rs_data_y,(int)rs_data_x,now_x,now_y,now_yaw,now_t - start_t);
