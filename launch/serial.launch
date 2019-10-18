@@ -1,9 +1,14 @@
 <launch>
     <node pkg="rosserial_server" type="socket_node" name="rosserial_server" />
     <node pkg="rosserial_python" type="message_info_service.py" name="rosserial_message_info" />
-    <arg name="P1" default="ACM0"/>
-    <arg name="P2" default="ACM1"/>
-    <arg name="P3" default="ACM2"/>
+    <arg name="P0" default="ACM0"/>
+    <arg name="P1" default="ACM1"/>
+    <arg name="P2" default="ACM2"/>
+    <arg name="P3" default="ACM3"/>
+    <node pkg="rosserial_server" type="serial_node" name="rosserial_tty$(arg P0)" output="screen">
+        <param name="port" value="/dev/tty$(arg P0)"/>
+        <param name="baud" value="115200"/>
+    </node>
     <node pkg="rosserial_server" type="serial_node" name="rosserial_tty$(arg P1)" output="screen">
         <param name="port" value="/dev/tty$(arg P1)"/>
         <param name="baud" value="115200"/>

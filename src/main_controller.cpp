@@ -191,7 +191,7 @@ int main(int argc,char **argv){
     constexpr double point[9][2][3] = {//赤　青
         {{300,NOMAL_Y,0},{-300,NOMAL_Y,0}},//ポール間に入る前
         {{1800,NOMAL_Y,0},{-1800,NOMAL_Y,0}},//ポール間に入る
-        {{1830,SEATS_Y - 400,0},{-3650,SEATS_Y - 400,0}},//シーツかけ始め
+        {{1830,SEATS_Y - 400,0},{-3800,SEATS_Y - 400,0}},//シーツかけ始め
         {{3880,SEATS_Y,0},{-1650,SEATS_Y,0}},//シーツかけ終わり
         {{1950,TOWEL_Y,0},{-1980,TOWEL_Y,0}},//タオル１予選４2090 2750 2000
         {{2100,TOWEL_Y,0},{-2130,TOWEL_Y,0}},//タオル１決勝 2180 2090
@@ -436,7 +436,13 @@ int main(int argc,char **argv){
                     setAuto(point[1][coat][0],point[1][coat][1],point[1][coat][2]);
                     next_move = 3;
                     status = 3;//pixyを使わない時
-                }/*else if(now_y > (NOMAL_Y - 500) && !send_flag){
+                }else if(fight == 1){
+                    lidar_x_diff = lidar_x - 390;
+                    if(fabs(lidar_x_diff) < 100){
+                        goal_x = now_x + lidar_x_diff;
+                    }
+                }
+                /*else if(now_y > (NOMAL_Y - 500) && !send_flag){
                     //cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
                     setAuto((coat ? -200 : 200),NOMAL_Y,0);
                     send_flag = true;
@@ -526,7 +532,7 @@ int main(int argc,char **argv){
                     lidar_x_ok = false;
                 }
                 if(!lidar_x_ok){
-                    if(false &&fabs(now_x - goal_x) < 300 && fabs(tmp_goal_x - point[num+4][coat][0]) < 250){
+                    if(fabs(now_x - goal_x) < 300 && fabs(tmp_goal_x - point[num+4][coat][0]) < 250){
                         if(rs_data){
                             goal_x = tmp_goal_x;
                             fprintf(fp,"バスタオル%d補正X RS_X:%d,%d Y:%d\tG(%d,%d),N(%d,%d)\tlidar(%d,%d)\t%ld\n",bath+1,(int)rs_data_x,(int)rsx_diff,(int)rs_data_y,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,lidar_x,lidar_y,now_t - start_t);
@@ -539,7 +545,7 @@ int main(int argc,char **argv){
 
                 if(next_move == 7){
                     lidar_y_diff = lidar_y - offset[0][0][4];
-                    if(fabs(lidar_y_diff) < 150 && fabs(now_y - goal_y) < 200 && (now_y - TOWEL_Y) < 100){
+                    if(fabs(lidar_y_diff) < 150 && fabs(now_y - goal_y) < 200 /*&& (now_y - TOWEL_Y) < 100*/){
                         goal_y = now_y + lidar_y_diff;
                         fprintf(fp,"バスタオル%d補正Y lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\tRS(%d,%d)\n",bath+1,lidar_x,lidar_y,lidar_y_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,(int)rs_data_x,(int)rs_data_y);
                     }else if(tmp_goal_y > (TOWEL_Y - 120) && tmp_goal_y < (TOWEL_Y + 50) && /*rsy_diff > -150*/ fabs(now_y - goal_y) < 200 && (now_y - TOWEL_Y) < 100){
@@ -928,8 +934,8 @@ void operate(const std_msgs::Float32MultiArray &data){
 inline void autoMove(){
     constexpr double A_MAX_LOOP[3] = {AMAX[0] / LOOP_RATE,AMAX[1] / LOOP_RATE,AMAX[2] / LOOP_RATE};
     constexpr double Kp  = 2.5; //自動移動//2.8
-    constexpr double Ki[2]  = {2.5,5.0};//0.0004//2.5 4.5
-    constexpr double Kd  = 0.04;//0.0006
+    constexpr double Ki[2]  = {2.5,8.0};//0.0004//2.5 4.5
+    constexpr double Kd  = 0.01;//0.0006
     static double xKi = Ki[0],yKi = Ki[0];
     static double send_v_x,send_v_y,send_omega;
     static double pid_v_x,pid_v_y,pid_omega;
@@ -945,13 +951,23 @@ inline void autoMove(){
     diff_x = goal_x - now_x;
     diff_y = goal_y - now_y;
     diff_yaw = goal_yaw - now_yaw;
-    if(fabs(now_v_x) < 0.06 && fabs(diff_x) < 50 && xKi == Ki[0]){
+    if(fabs(now_v_x) < 0.05 && fabs(diff_x) < 50 && xKi == Ki[0]){
         xKi = Ki[1];
-        std::cout << "xKi" << std::endl; 
+        errer_x = 0;
+        std::cout << "xKi 1" << std::endl; 
+    }else if(fabs(now_v_x) > 200 && xKi == Ki[1]){
+        xKi = Ki[0];
+        errer_x = 0;
+        std::cout << "xKi 0" << std::endl;
     }
-    if(fabs(now_v_y) < 0.06 && fabs(diff_y) < 50 && yKi == Ki[0]){
+    if(fabs(now_v_y) < 0.05 && fabs(diff_y) < 50 && yKi == Ki[0]){
         yKi = Ki[1];
-        std::cout << "yKi" << std::endl;
+        errer_y = 0;
+        std::cout << "yKi 1" << std::endl;
+    }else if(fabs(now_v_y) > 200 && yKi == Ki[1]){
+        yKi = Ki[0];
+        errer_y = 0;
+        std::cout << "yKi 0" << std::endl;
     }
 
     pid_v_x = constrain(diff_x * Kp + errer_x * xKi + diff_v_x * Kd,-VMAX[spreaded],VMAX[spreaded]);
@@ -963,10 +979,18 @@ inline void autoMove(){
         }
     }else{
         if(fabs(diff_x) < 180){
-            errer_x += diff_x / LOOP_RATE;
+            //errer_x += diff_x / LOOP_RATE;
             diff_v_x = (pid_v_x - send_v_x) * LOOP_RATE;
+        }else{
+            //errer_x = 0;
+            diff_v_x = 0;
         }
         send_v_x = pid_v_x;
+    }
+    if(fabs(diff_x) < 180){
+        errer_x += diff_x / LOOP_RATE;
+    }else{
+        errer_x = 0;
     }
 
     pid_v_y = constrain(diff_y * Kp + errer_y * yKi + diff_v_y * Kd,-VMAX[spreaded],VMAX[spreaded]);
@@ -978,10 +1002,18 @@ inline void autoMove(){
         }
     }else{
         if(fabs(diff_y) < 180){
-            errer_y += diff_y / LOOP_RATE;
+            //errer_y += diff_y / LOOP_RATE;
             diff_v_y = (pid_v_y - send_v_y) * LOOP_RATE;
+        }else{
+            //errer_y = 0;
+            diff_v_y = 0;
         }
         send_v_y = pid_v_y;
+    }
+    if(fabs(diff_y) < 180){
+        errer_y += diff_y / LOOP_RATE;
+    }else{
+        errer_y = 0;
     }
 
     pid_omega = constrain(-diff_yaw / 40 + errer_omega / 60 - diff_omega / 100,-0.9,0.9);
@@ -998,7 +1030,7 @@ inline void autoMove(){
     }
 
     if((fabs(diff_x) < 10 && fabs(diff_y) < 10 && fabs(diff_yaw) < 0.5
-                && fabs(now_v_x) < 15 && fabs(now_v_y) < 15 && fabs(now_omega) < 0.02) || skip){
+                && fabs(now_v_x) < 10 && fabs(now_v_y) < 10 && fabs(now_omega) < 0.02) || skip){
         send_v_x = 0;
         send_v_y = 0;
         send_omega = 0;
