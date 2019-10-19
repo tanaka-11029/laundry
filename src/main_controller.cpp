@@ -191,9 +191,9 @@ int main(int argc,char **argv){
     constexpr double point[9][2][3] = {//赤　青
         {{300,NOMAL_Y,0},{-300,NOMAL_Y,0}},//ポール間に入る前
         {{1800,NOMAL_Y,0},{-1800,NOMAL_Y,0}},//ポール間に入る
-        {{1830,SEATS_Y - 400,0},{-3800,SEATS_Y - 400,0}},//シーツかけ始め
+        {{1830,SEATS_Y - 400,0},{-3740,SEATS_Y - 400,0}},//シーツかけ始め
         {{3880,SEATS_Y,0},{-1650,SEATS_Y,0}},//シーツかけ終わり
-        {{1950,TOWEL_Y,0},{-1980,TOWEL_Y,0}},//タオル１予選４2090 2750 2000
+        {{1950,TOWEL_Y,0},{-2020,TOWEL_Y,0}},//タオル１予選４1980 2750 2000 
         {{2100,TOWEL_Y,0},{-2130,TOWEL_Y,0}},//タオル１決勝 2180 2090
         {{3200,TOWEL_Y,0},{-3190,TOWEL_Y,0}},//タオル２予選６3300 3550 3020
         {{3510,TOWEL_Y,0},{-3480,TOWEL_Y,0}},//タオル２決勝 3500 3410
@@ -201,12 +201,12 @@ int main(int argc,char **argv){
     };
     //rs_x,rs_y,lidar_fence,lidar_base,lidar_y
     constexpr double offset[6][2][5] = {//赤　青
-        {{830 ,3900,2960,1930,2870},{-1040,3900,2080,340 ,2870}},//タオル１　予選
-        {{680 ,3900,2840,1830,2870},{-790 ,3900,2220,435 ,2870}},//タオル１　決勝
-        {{-485,3930,1770,720 ,2870},{330 ,3900,3248,1430,2870}},//タオル２　予選
-        {{-775,3930,1510,460 ,2870},{646 ,3900,3560,1820,2870}},//タオル２　決勝
+        {{830 ,3900,2960,1930,2930},{-1040,3900,2020,300 ,2930}},//タオル１　予選 2870 340
+        {{680 ,3900,2840,1830,2930},{-790 ,3900,2220,435 ,2930}},//タオル１　決勝
+        {{-485,3930,1770,720 ,2930},{330 ,3900,3180,1390,2930}},//タオル２　予選 3190 1430
+        {{-775,3930,1510,460 ,2930},{646 ,3900,3560,1820,2930}},//タオル２　決勝
         {{1010 ,2140,3180,2060,1350},{1010 ,2140,3900,2060,1350}},//シーツ 始め
-        {{-1100,2140,1080,0,1330},{-1100,2140,1850,0,1330}}//シーツ　終わり /2080
+        {{-1100,2140,1080,0,1350},{-1100,2140,1850,0,1350}}//シーツ　終わり /2080
     };
     constexpr char coat_name[2][10] = {
         {"赤"},
@@ -365,6 +365,10 @@ int main(int argc,char **argv){
         if(warn_count >= LOOP_RATE*30){
             if(!warn){
                 ROS_WARN("UNCONNECTED TO STM32");
+                std_msgs::Float32MultiArray msg;
+                msg.data.resize(1);
+                msg.data[0] = -2;
+                operate(msg);
                 warn = true;
                 change_data = true;
             }
@@ -485,7 +489,7 @@ int main(int argc,char **argv){
                 stm_auto = false;
                 num = 4+2*bath+fight;
                 if(bath == 0){
-                    setAuto(point[num][coat][0],point[num][coat][1],point[num][coat][2]);
+                    setAuto(point[num][coat][0],point[num][coat][1] + 100,point[num][coat][2]);
                 }else{
                     setAuto(point[num][coat][0],NOMAL_Y,0); 
                 }
@@ -496,6 +500,7 @@ int main(int argc,char **argv){
                 rs_goal_y = offset[num-4][coat][1];
                 rs_goal_x = offset[num-4][coat][0];
                 rs_use = true;//リアルセンス有効化
+                count = 0;
                 break;
             case 6://移動補正
                 if(num != 2*bath+fight){
@@ -509,13 +514,13 @@ int main(int argc,char **argv){
                 }   
                 if(fabs(now_x - point[num+4][coat][0]) < 400 && next_move == 6 && bath == 1){
                     next_move = 7;
-                    goal_y = TOWEL_Y;
+                    goal_y = TOWEL_Y + 100;
                     auto_move = true;
-                }else if(fabs(goal_x - point[num+4][coat][0]) < 250){
-                    lidar_x_diff = lidar_x - offset[num][coat][2];//フェンス
+                }else if(fabs(goal_x - point[num+4][coat][0]) < 150){
+                    lidar_x_diff = (lidar_x - offset[num][coat][2]);//フェンス
                     if(fabs(lidar_x_diff) > 200/* || (coat ? fabs(now_x + lidar_x + 100) : fabs(now_x + lidar_x - 4830)) < 300*/){
                         lidar_x_diff = lidar_x - offset[num][coat][3];//台座
-                        if(fabs(lidar_x_diff) < 200){
+                        if(fabs(lidar_x_diff) < 50 && false){
                             goal_x = now_x + lidar_x_diff;
                             lidar_x_ok = true;
                             fprintf(fp,"バスタオル%d補正X 台座 lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\tRS(%d,%d)\t%ld\n",bath+1,lidar_x,lidar_y,lidar_x_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,(int)rs_data_x,(int)rs_data_y,now_t - start_t);
@@ -532,20 +537,29 @@ int main(int argc,char **argv){
                     lidar_x_ok = false;
                 }
                 if(!lidar_x_ok){
-                    if(fabs(now_x - goal_x) < 300 && fabs(tmp_goal_x - point[num+4][coat][0]) < 250){
+                    if(fabs(now_x - goal_x) < 300 && fabs(tmp_goal_x - point[num+4][coat][0]) < 250 && rs_data_x != 0){
                         if(rs_data){
                             goal_x = tmp_goal_x;
                             fprintf(fp,"バスタオル%d補正X RS_X:%d,%d Y:%d\tG(%d,%d),N(%d,%d)\tlidar(%d,%d)\t%ld\n",bath+1,(int)rs_data_x,(int)rsx_diff,(int)rs_data_y,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,lidar_x,lidar_y,now_t - start_t);
                         }
+                        if(count != 0){
+                            count = 0;
+                        }
                     }else{
-                        goal_x = point[num+4][coat][0];
+                        if(count > 25){
+                            goal_x = point[num+4][coat][0];
+                        }else{
+                            count++;
+                        }
                         fprintf(fp,"バスタオル%d補正X 無し lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\tRS(%d,%d)\t%ld\n",bath+1,lidar_x,lidar_y,lidar_x_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,(int)rs_data_x,(int)rs_data_y,now_t - start_t);
                     }
+                }else if(count != 0){
+                    count = 0;
                 }
 
-                if(next_move == 7){
-                    lidar_y_diff = lidar_y - offset[0][0][4];
-                    if(fabs(lidar_y_diff) < 150 && fabs(now_y - goal_y) < 200 /*&& (now_y - TOWEL_Y) < 100*/){
+                if(next_move == 7 && fabs(now_x - goal_x) < 30){
+                    lidar_y_diff = (lidar_y - offset[0][0][4]);
+                    if(fabs(lidar_y_diff) < 150 /*&& fabs(now_y - goal_y) < 200*/ && (now_y - TOWEL_Y) > -100){
                         goal_y = now_y + lidar_y_diff;
                         fprintf(fp,"バスタオル%d補正Y lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\tRS(%d,%d)\n",bath+1,lidar_x,lidar_y,lidar_y_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,(int)rs_data_x,(int)rs_data_y);
                     }else if(tmp_goal_y > (TOWEL_Y - 120) && tmp_goal_y < (TOWEL_Y + 50) && /*rsy_diff > -150*/ fabs(now_y - goal_y) < 200 && (now_y - TOWEL_Y) < 100){
@@ -599,14 +613,14 @@ int main(int argc,char **argv){
                 break;
             case 10://干し始め位置へ移動
                 stm_auto = false;
-                setAuto(point[2][coat][0],point[2][coat][1],point[2][coat][2]);
+                setAuto(point[2][coat][0] - 100,point[2][coat][1],point[2][coat][2]);
                 now_t = time(nullptr);
                 fprintf(fp,"シーツ補正前 lidar(%d,%d) RS_Y:%d,X:%d\tnow(%f,%f,%f)\t%ld\n",lidar_x,lidar_y,(int)rs_data_y,(int)rs_data_x,now_x,now_y,now_yaw,now_t - start_t);
                 status = 11;
                 next_move = 11;
                 rs_use = true;//リアルセンス有効化
                 rs_goal_y = offset[4][coat][1];
-                rs_goal_x = offset[4][coat][0] - 50;
+                rs_goal_x = offset[4][coat][0] - 100;
                 count = 0;
                 break;
             case 11://補正動作
@@ -621,7 +635,7 @@ int main(int argc,char **argv){
                 }else if(count > 0){
                     count = 0;
                 }
-                lidar_x_diff = lidar_x - offset[4][coat][2] + ((next_move == 12 && fabs(now_y - goal_y) < 150) ? 0 : 50);//フェンス
+                lidar_x_diff = lidar_x - offset[4][coat][2] + ((next_move == 12 && fabs(now_y - goal_y) < 100) ? 0 : 100);//フェンス
                 if(fabs(now_y - goal_y) < 100 && spreaded == 2){
                     rs_goal_x = offset[4][coat][0];
                 }
@@ -640,8 +654,8 @@ int main(int argc,char **argv){
                         goal_x = tmp_goal_x;
                         fprintf(fp,"シーツ補正X RS_X:%d,%d Y:%d\tG(%d,%d),N(%d,%d)\tlidar(%d,%d)\n",(int)rs_data_x,(int)rsx_diff,(int)rs_data_y,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,lidar_x,lidar_y);
                     }
-                }else if(fabs(lidar_x_diff) > 200 || fabs(goal_x - now_x) > 300 || fabs(goal_x - point[2][coat][0]) > 300){
-                    goal_x = point[2][coat][0] + ((next_move == 12 && fabs(now_y - goal_y) < 150) ? 0 : 50);
+                }else if(fabs(lidar_x_diff) > 300 || fabs(goal_x - now_x) > 300 || fabs(goal_x - point[2][coat][0]) > 300){
+                    goal_x = point[2][coat][0] + ((next_move == 12 && fabs(now_y - goal_y) < 100) ? 0 : 100);
                     fprintf(fp,"シーツ補正X 無視lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\tRS(%d,%d)\n",lidar_x,lidar_y,lidar_x_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,(int)rs_data_x,(int)rs_data_y);
                 }else{
                     goal_x = now_x + lidar_x_diff;
@@ -663,7 +677,7 @@ int main(int argc,char **argv){
                             goal_y = tmp_goal_y;
                             fprintf(fp,"シーツ補正Y RS_Y:%d,%d X:%d\tG(%d,%d),N(%d,%d)\n",(int)rs_data_y,(int)rsy_diff,(int)rs_data_x,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y);
                         }
-                    }else if(fabs(lidar_y_diff) < 200 && goal_y < (SEATS_Y + 30)){
+                    }else if(fabs(lidar_y_diff) < 400 && goal_y < (SEATS_Y + 30)){
                         goal_y = now_y + lidar_y_diff;
                         fprintf(fp,"シーツ補正Y lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\tRS(%d,%d)\n",lidar_x,lidar_y,lidar_y_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,(int)rs_data_x,(int)rs_data_y);
                     }else{
@@ -715,7 +729,7 @@ int main(int argc,char **argv){
                 }else{
                     lidar_x_diff = lidar_x - offset[5][coat][2];//フェンス
                     if(fabs(now_x - goal_x) < 200){
-                        goal_x = now_x + 150;
+                        goal_x = now_x + 50;
                          fprintf(fp,"干しリミットまで RS_X:%d,%d\tG(%d,%d),N(%d,%d)\tlidar(%d,%d)\n",(int)rs_data_x,(int)rsx_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,lidar_x,lidar_y);
                     }else if(fabs(now_x - point[3][coat][0]) < 400 && fabs(rsx_diff) < 300){
                         if(rs_data){
@@ -731,17 +745,18 @@ int main(int argc,char **argv){
                     }
                 }
                 lidar_y_diff = lidar_y - offset[5][0][4];
-                if(fabs(rsy_diff) < 100 && tmp_goal_y < (SEATS_Y + 50)){
+                if(fabs(rsy_diff) < 100 && tmp_goal_y < (SEATS_Y + 50) && rs_data_y != 0){
                     if(rs_data){
                         rs_data = false;
                         goal_y = tmp_goal_y;
                         fprintf(fp,"干し補正Y RS_Y:%d,%d\tG(%d,%d),N(%d,%d)\n",(int)rs_data_y,(int)rsy_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y);
                     }
-                }else if(fabs(lidar_y_diff) < 400){
+                }else if(fabs(lidar_y_diff) < 400 && goal_y < (SEATS_Y + 30)){
                     goal_y = now_y + lidar_y_diff;
                     fprintf(fp,"干し補正Y lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\n",lidar_x,lidar_y,lidar_y_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y);
                 }else{
                     rs_data = false;
+                    goal_y = SEATS_Y;
                     fprintf(fp,"干し補正Y 無視 lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\n",lidar_x,lidar_y,lidar_y_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y);
                 }
                 break;
@@ -764,28 +779,26 @@ int main(int argc,char **argv){
             case 17://帰り準備
                 if(now_y < NOMAL_Y + 450){
                     sendSerial(1,5,-2);//端をつかむソレノイドを開放する
-                    status = 18;
                     next_move = 18;
+                    if(spreaded > 0 /*&& false*/){
+                        now_t = time(nullptr);
+                        fprintf(fp,"帰り準備 now(%f,%f,%f)\t%ld\n",now_x,now_y,now_yaw,now_t - start_t);
+                        sendMechanism(7);//圧縮動作
+                        status = 0;
+                        next_move = 18;
+                    }else{
+                        status = 18;
+                    }
                 }
-                /*
-                if(spreaded > 0){
-                    now_t = time(nullptr);
-                    fprintf(fp,"帰り準備 now(%f,%f,%f)\t%ld\n",now_x,now_y,now_yaw,now_t - start_t);
-                    sendMechanism(7);//圧縮動作
-                    status = 0;
-                    next_move = 18;
-                }else{
-                    status = 18;
-                }*/
                 break;
             case 18://スタートゾーンへ戻る
                 //ここで動作を止める
-                status = 0;
+                /*status = 0;
                 next_move = 0;
                 skip = true;
                 fprintf(fp,"動作終了 now(%f,%f,%f)\t%ld\n",now_x,now_y,now_yaw,now_t - start_t);
                 break;
-
+*/
                 stm_auto = false;
                 //cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
                 setAuto(point[8][coat][0],point[8][coat][1],point[8][coat][2]);
@@ -808,6 +821,7 @@ int main(int argc,char **argv){
                 break;
             case 21:
                 //cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
+                sendSerial(1,4,0);
                 now_t = time(nullptr);
                 fprintf(fp,"ホーム到着 now(%f,%f,%f)\t%ld\n",now_x,now_y,now_yaw,now_t - start_t);
                 status = 0;
@@ -934,8 +948,8 @@ void operate(const std_msgs::Float32MultiArray &data){
 inline void autoMove(){
     constexpr double A_MAX_LOOP[3] = {AMAX[0] / LOOP_RATE,AMAX[1] / LOOP_RATE,AMAX[2] / LOOP_RATE};
     constexpr double Kp  = 2.5; //自動移動//2.8
-    constexpr double Ki[2]  = {2.5,8.0};//0.0004//2.5 4.5
-    constexpr double Kd  = 0.01;//0.0006
+    constexpr double Ki[2]  = {2.5,4.5};//0.0004//2.5 4.5
+    constexpr double Kd  = 0.02;//0.0006
     static double xKi = Ki[0],yKi = Ki[0];
     static double send_v_x,send_v_y,send_omega;
     static double pid_v_x,pid_v_y,pid_omega;
@@ -970,51 +984,53 @@ inline void autoMove(){
         std::cout << "yKi 0" << std::endl;
     }
 
-    pid_v_x = constrain(diff_x * Kp + errer_x * xKi + diff_v_x * Kd,-VMAX[spreaded],VMAX[spreaded]);
+    pid_v_x = constrain(diff_x * Kp + errer_x * xKi - diff_v_x * Kd,-VMAX[spreaded],VMAX[spreaded]);
     if(fabs(pid_v_x) >= fabs(send_v_x)){
         if(fabs(send_v_x - pid_v_x) > A_MAX_LOOP[spreaded]){
             send_v_x += (pid_v_x >= 0 ? 1 : -1)*A_MAX_LOOP[spreaded];
         }else{
             send_v_x = pid_v_x;
         }
+        diff_v_x = 0;
     }else{
         if(fabs(diff_x) < 180){
-            //errer_x += diff_x / LOOP_RATE;
+            errer_x += diff_x / LOOP_RATE;
             diff_v_x = (pid_v_x - send_v_x) * LOOP_RATE;
         }else{
-            //errer_x = 0;
+            errer_x = 0;
             diff_v_x = 0;
         }
         send_v_x = pid_v_x;
-    }
+    }/*
     if(fabs(diff_x) < 180){
         errer_x += diff_x / LOOP_RATE;
     }else{
         errer_x = 0;
-    }
+    }*/
 
-    pid_v_y = constrain(diff_y * Kp + errer_y * yKi + diff_v_y * Kd,-VMAX[spreaded],VMAX[spreaded]);
+    pid_v_y = constrain(diff_y * Kp + errer_y * yKi - diff_v_y * Kd,-VMAX[spreaded],VMAX[spreaded]);
     if(fabs(pid_v_y) >= fabs(send_v_y)){
         if(fabs(send_v_y - pid_v_y) > A_MAX_LOOP[spreaded]){
             send_v_y += (pid_v_y >= 0 ? 1 : -1)*A_MAX_LOOP[spreaded];
         }else{
             send_v_y = pid_v_y;
         }
+        diff_v_y = 0;
     }else{
         if(fabs(diff_y) < 180){
-            //errer_y += diff_y / LOOP_RATE;
+            errer_y += diff_y / LOOP_RATE;
             diff_v_y = (pid_v_y - send_v_y) * LOOP_RATE;
         }else{
-            //errer_y = 0;
+            errer_y = 0;
             diff_v_y = 0;
         }
         send_v_y = pid_v_y;
-    }
+    }/*
     if(fabs(diff_y) < 180){
         errer_y += diff_y / LOOP_RATE;
     }else{
         errer_y = 0;
-    }
+    }*/
 
     pid_omega = constrain(-diff_yaw / 40 + errer_omega / 60 - diff_omega / 100,-0.9,0.9);
     if(fabs(pid_omega) >= fabs(send_omega)){
@@ -1029,8 +1045,8 @@ inline void autoMove(){
         errer_omega += -diff_yaw / LOOP_RATE;
     }
 
-    if((fabs(diff_x) < 10 && fabs(diff_y) < 10 && fabs(diff_yaw) < 0.5
-                && fabs(now_v_x) < 10 && fabs(now_v_y) < 10 && fabs(now_omega) < 0.02) || skip){
+    if((fabs(diff_x) < 20 && fabs(diff_y) < 20 && fabs(diff_yaw) < 0.5
+                && fabs(now_v_x) < 20 && fabs(now_v_y) < 20 && fabs(now_omega) < 0.02) || skip){
         send_v_x = 0;
         send_v_y = 0;
         send_omega = 0;

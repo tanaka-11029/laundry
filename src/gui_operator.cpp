@@ -161,11 +161,11 @@ void changeText(const laundry::PrintStatus &data){
     if(data.warn != warn){
         warn = data.warn;
         if(warn){
-            button_click(NULL,GINT_TO_POINTER(7));
+            //button_click(NULL,GINT_TO_POINTER(7));
             gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[9]);
             gtk_label_set_markup(GTK_LABEL(tips),tips_msg[4]);
         }else{
-            button_click(NULL,GINT_TO_POINTER(7));
+            //button_click(NULL,GINT_TO_POINTER(7));
             gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
         }
     }

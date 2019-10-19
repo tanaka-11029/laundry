@@ -90,15 +90,12 @@ void runFunc(const std_msgs::Int32 &data){
             }
             break;
         case 7://収納
-            sendSerial(1,5,-2);
-            sendSerial(1,4,0);
-            loop_rate->sleep();
-            loop_rate->sleep();
             if(spread == 2){
                 sendSerial(1,3,1);
                 //sendSerial(1,6,0);
             }
             waitMove(10);
+            sendSerial(1,4,0);
             break;
         default:
             skip = true;
