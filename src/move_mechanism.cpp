@@ -90,6 +90,7 @@ void runFunc(const std_msgs::Int32 &data){
             }
             break;
         case 7://収納
+            waitMove(5);
             if(spread == 2){
                 sendSerial(1,3,1);
                 //sendSerial(1,6,0);
