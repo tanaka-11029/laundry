@@ -9,7 +9,6 @@
 #include <std_msgs/Int64.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int16.h>
-#include "laundry/PrintStatus.h"
 #include "cs_connection/RsDataMsg.h"
 
 constexpr char spread_name[3][20] = {

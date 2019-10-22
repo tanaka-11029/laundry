@@ -55,7 +55,7 @@ pkg_check_modules(LIBUSB QUIET libusb-1.0)
  add_message_files(
    FILES
    PixyData.msg
-   PrintStatus.msg
+#   PrintStatus.msg
 #   Message1.msg
 #   Message2.msg
  )
