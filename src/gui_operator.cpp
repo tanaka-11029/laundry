@@ -146,17 +146,17 @@ void changeText(const cs_connection::PrintStatus &data){
     static int last_status = 0,last_next = 0;
     static char label_name[2][200];
     static bool warn = false;
-    static bool last_coat,last_fight;
+    //static bool last_coat,last_fight;
     if(data.next != last_next || data.status != last_status){
         last_next = data.next;
         sprintf(label_name[0],"<span foreground='black' size='70000' weight='ultrabold'>ステータス:%d  次:%d</span>",data.status,data.next);
         gtk_label_set_markup(GTK_LABEL(status_num),label_name[0]);
     }
-    if(data.coat != last_coat || data.fight != last_fight){
+    if(data.coat != coat || data.fight != fight){
         sprintf(label_name[1],"%s%s",coat_msg[data.coat],fight_msg[data.fight]);
         gtk_label_set_markup(GTK_LABEL(COAT),label_name[1]);
-        last_coat = data.coat;
-        last_fight = data.fight;
+        coat = data.coat;
+        fight = data.fight;
     }
     if(data.warn != warn){
         warn = data.warn;
@@ -167,6 +167,7 @@ void changeText(const cs_connection::PrintStatus &data){
         }else{
             //button_click(NULL,GINT_TO_POINTER(7));
             gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[0]);
+            gtk_label_set_markup(GTK_LABEL(tips),tips_msg[3]);
         }
     }
     if(!only_move){
@@ -293,14 +294,12 @@ void button_click(GtkWidget* widget,gpointer data){
     switch (GPOINTER_TO_INT(data)) {
         case 0://コート切り替え
             if(!lock){
-                coat = !coat;
-                cmdnum(12,coat,fight,0);
+                cmdnum(12,!coat,fight,0);
             }
             break;
         case 1://予選・決勝切り替え
             if(!lock){
-                fight = !fight;
-                cmdnum(12,coat,fight,0);
+                cmdnum(12,coat,!fight,0);
             }
             break;
         case 2://キャリブレーション
@@ -384,7 +383,7 @@ void button_click(GtkWidget* widget,gpointer data){
             }
             break;
         case 9://コマンド実行
-            if(ready){
+            if(ready && !emergency){
                 gtk_label_set_markup(GTK_LABEL(tips),tips_msg[1]);
                 ready = false;
                 if(setup_move){
@@ -562,27 +561,27 @@ void key_press(GtkWidget* widget,GdkEventKey *event,gpointer data){
             break;
         case 'w':
         case 'W':
-            manual_v_y = 300;
+            manual_v_y = 500;
             break;
         case 'a':
         case 'A':
-            manual_v_x = -300;
+            manual_v_x = -500;
             break;
         case 's':
         case 'S':
-            manual_v_y = -300;
+            manual_v_y = -500;
             break;
         case 'd':
         case 'D':
-            manual_v_x = 300;
+            manual_v_x = 500;
             break;
         case 'e':
         case 'E':
-            manual_omega = 0.1;
+            manual_omega = 0.3;
             break;
         case 'q':
         case 'Q':
-            manual_omega = -0.1;
+            manual_omega = -0.3;
             break;
     }
 }

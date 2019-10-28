@@ -98,6 +98,14 @@ void runFunc(const std_msgs::Int32 &data){
             waitMove(10);
             sendSerial(1,4,0);
             break;
+        case 8:
+            sendSerial(1,2,0);
+            waitMove(10);
+            break;
+        case 9:
+            sendSerial(1,2,1);
+            waitMove(10);
+            break;
         default:
             skip = true;
             msg.data = -1;
