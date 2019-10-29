@@ -208,12 +208,12 @@ int main(int argc,char **argv){
     };
     //rs_x,rs_y,lidar_fence,lidar_base,lidar_y
     constexpr double offset[6][2][5] = {//赤　青
-        {{816 ,3780,2865,1800,2950},{-878,3760,1990,315 ,2930}},//タオル１　予選 2870 340
-        {{680 ,3780,2750,1710,2950},{-737,3775,2130,390 ,2930}},//タオル１　決勝
-        {{-420,3850,1685,660 ,3000},{422 ,3830,3225,1455,2950}},//タオル２　予選 3190 1430
-        {{-695,3850,1430,390 ,3000},{660 ,3780,3350,1695,2950}},//タオル２　決勝
-        {{1010,2000,3080,2060,1420},{1018,2000,3810,2060,1420}},//シーツ 始め 3180 1370
-        {{-1050,2000,1075,0,1420},{-1050,2000,1850,0,1420}}//シーツ　終わり /2080
+        {{816 ,3770,2865,1800,2950},{-878,3770,1990,315 ,2930}},//タオル１　予選 2870 340
+        {{680 ,3770,2750,1710,2950},{-737,3770,2130,390 ,2930}},//タオル１　決勝 3780
+        {{-420,3770,1685,660 ,2950},{422 ,3770,3225,1455,2950}},//タオル２　予選 3190 1430
+        {{-695,3770,1430,390 ,2950},{660 ,3770,3350,1695,2950}},//タオル２　決勝
+        {{1010,2080,3080,2060,1420},{1018,2080,3840,2060,1420}},//シーツ 始め 3180 1370
+        {{-1050,2080,1075,0,1420},{-1050,2080,1850,0,1420}}//シーツ　終わり /2080
     };
     constexpr char coat_name[2][10] = {
         {"赤"},
@@ -376,6 +376,9 @@ int main(int argc,char **argv){
 #endif
         if(warn_count >= LOOP_RATE*30){
             if(!warn){
+                if(status != 0 || next_move != 0){
+                    fprintf(fp,"STM32通信切れ\n");
+                }
                 ROS_WARN("UNCONNECTED TO STM32");
                 std_msgs::Float32MultiArray msg;
                 msg.data.resize(1);
@@ -387,6 +390,9 @@ int main(int argc,char **argv){
         }else{
             warn_count++;
             if(warn){
+                if(status != 0 || next_move != 0){
+                    fprintf(fp,"STM32通信回復\n");
+                }
                 ROS_INFO("CONNECTED TO STM32");
                 warn = false;
                 change_data = true;
@@ -394,6 +400,9 @@ int main(int argc,char **argv){
         }
         if(rs_count >= LOOP_RATE*10){
             if(!rs_disconnect){
+                if(status != 0 || next_move != 0){
+                    fprintf(fp,"CS通信切れ\n");
+                }
                 ROS_WARN("UNCONNECTED TO CONTROL STATION");
                 rs_data_x = 0;
                 rs_data_y = 0;
@@ -405,6 +414,9 @@ int main(int argc,char **argv){
         }else{
             rs_count++;
             if(rs_disconnect){
+                if(status != 0 || next_move != 0){
+                    fprintf(fp,"CS通信回復\n");
+                }
                 ROS_INFO("CONNECTED TO CONTROL STATION");
                 rs_disconnect = false;
             }
@@ -522,7 +534,7 @@ int main(int argc,char **argv){
                 stm_auto = false;
                 num = 4+2*bath+fight;
                 if(bath == 0){
-                    setAuto(point[num][coat][0],point[num][coat][1] + 100,point[num][coat][2]);
+                    setAuto(point[num][coat][0],point[num][coat][1] + 150,point[num][coat][2]);
                     towel_back = false;
                 }else{
                     setAuto(now_x/*point[num][coat][0]*/,NOMAL_Y,0);
@@ -573,7 +585,7 @@ int main(int argc,char **argv){
                 if(fabs(now_x - point[num+4][coat][0]) < 400 && !towel_y_ok && bath == 1){
                     //next_move = 7;
                     towel_y_ok = true;
-                    goal_y = TOWEL_Y + 100;
+                    goal_y = TOWEL_Y + 150;
                     auto_move = true;
                 }else if(fabs(goal_x - point[num+4][coat][0]) < 250 && fabs(now_yaw) < 2 && (!towel_x_ok/* || rs_data_x == 0*/)){
                     lidar_x_diff = (lidar_x - offset[num][coat][2]);//フェンス
@@ -616,7 +628,7 @@ int main(int argc,char **argv){
                     count = 0;
                 }
 
-                if(towel_y_ok && ((wait_num == 0 && fabs(now_x - goal_x) < 10 && fabs(now_v_x) < 30 && fabs(now_yaw) < 2 && !towel_x_ok) || !auto_move)){
+                if(towel_y_ok && ((wait_num == 0 && fabs(now_x - goal_x) < 10 && fabs(now_v_x) < 30 && fabs(now_yaw) < 1 && !towel_x_ok) || !auto_move)){
                     towel_x_ok = true;
                     next_move = 7;
                     auto_move = true;
@@ -716,7 +728,7 @@ int main(int argc,char **argv){
                     count = 0;
                 }
                 lidar_x_diff = lidar_x - offset[4][coat][2] + ((next_move == 12 && fabs(now_y - goal_y) < 100) ? 0 : 50);//フェンス
-                if(fabs(now_y - goal_y) < 100 && spreaded == 2){
+                if(fabs(now_y - goal_y) < 100 && next_move == 12){
                     rs_goal_x = offset[4][coat][0];
                 }
                 if(limit_left){
@@ -730,7 +742,7 @@ int main(int argc,char **argv){
                         goal_x = now_x + 15;
                     }
                     fprintf(fp,"シーツリミット左 lidar(%d,%d) RS_Y:%d,X:%d\tnow(%d,%d,%f)\n",lidar_x,lidar_y,(int)rs_data_y,(int)rs_data_x,(int)now_x,(int)now_y,now_yaw);
-                }else if(fabs(rsx_diff) < 300 && fabs(tmp_goal_x - point[2][coat][0]) < 300 && /*fabs(now_y - SEATS_Y) < 100 && */spreaded == 2){
+                }else if(fabs(rsx_diff) < 300 && fabs(tmp_goal_x - point[2][coat][0]) < 300 && spreaded == 2){
                     //goal_x = now_x - 50;
                     if(rs_data){
                         goal_x = tmp_goal_x;
@@ -754,7 +766,7 @@ int main(int argc,char **argv){
                     if(now_y > (SEATS_Y + 50)){
                         goal_y = SEATS_Y;
                         fprintf(fp,"シーツ補正Y 無し RS(%d,%d) G(%d,%d),N(%d,%d)\tlidar(%d,%d)\n",(int)rs_data_x,(int)rs_data_y,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,lidar_x,lidar_y);
-                    }else if(fabs(SEATS_Y  - tmp_goal_y) < 150 && tmp_goal_y < (SEATS_Y + 120)&& rsy_diff < 150 && (now_y - SEATS_Y) < 200){
+                    }else if(fabs(SEATS_Y  - tmp_goal_y) < 300 && tmp_goal_y < (SEATS_Y + 120)&& rsy_diff < 150 && (now_y - SEATS_Y) < 200){
                         if(rs_data){
                             goal_y = tmp_goal_y;
                             fprintf(fp,"シーツ補正Y RS_Y:%d,%d X:%d\tG(%d,%d),N(%d,%d)\n",(int)rs_data_y,(int)rsy_diff,(int)rs_data_x,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y);
@@ -876,11 +888,11 @@ int main(int argc,char **argv){
                 break;
             case 18://スタートゾーンへ戻る
                 //ここで動作を止める
-                status = 0;
-                next_move = 0;
-                skip = true;
-                fprintf(fp,"動作終了 now(%f,%f,%f)\t%ld\n",now_x,now_y,now_yaw,now_t - start_t);
-                break;
+                //status = 0;
+                //next_move = 0;
+                //skip = true;
+                //fprintf(fp,"動作終了 now(%f,%f,%f)\t%ld\n",now_x,now_y,now_yaw,now_t - start_t);
+                //break;
 
                 stm_auto = false;
                 //cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
