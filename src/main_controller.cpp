@@ -20,15 +20,15 @@
 //using std::fabs;
 
 constexpr int LOOP_RATE  = 25;
-constexpr double AMAX[3] = {600,600,150}; // mm/s/s
-constexpr double FAST_V = 1500;
+constexpr double AMAX[3] = {1000,1000,150}; // mm/s/s
+constexpr double FAST_V = 1800;
+constexpr double JARK[3] = {100,100,100}; //mm/s/s/s
 constexpr double VMAX[3] = {1200,1200,500}; // mm/s
 std_msgs::Float32MultiArray move_data;
 cs_connection::PrintStatus send_status;
 ros::Publisher motor;
 ros::Publisher mechanism;
 ros::Publisher mdd;
-int spreaded = 0;
 bool coat = false;//0:赤　1:青
 bool fight = false;//0:予選 1:決勝
 bool skip = false;
@@ -47,6 +47,7 @@ bool rs_data = false;
 bool rs_use = false;
 bool ready = false;
 bool fast_mode = false;
+int spreaded = 0;
 int stm_status = 0;
 int status = 0;
 int next_move = 0;
@@ -134,9 +135,9 @@ void getRsmsg(const cs_connection::RsDataMsg &data){
     rs_data_z = data.z_distance;
     if(rs_use){
         rs_data = true;
-        rsy_diff = (rs_data_y - rs_goal_y) * 0.8;
+        rsy_diff = (rs_data_y - rs_goal_y) * 0.95;
         tmp_goal_y = now_y + rsy_diff;
-        rsx_diff = (rs_data_x - rs_goal_x) * 0.8;
+        rsx_diff = (rs_data_x - rs_goal_x) * 0.95;
         tmp_goal_x = now_x + rsx_diff;
     }
     if(rs_count != 0){
@@ -193,8 +194,8 @@ void getLidar(const std_msgs::Int64 &data){
 
 int main(int argc,char **argv){
     constexpr double NOMAL_Y = 5700;
-    constexpr double SEATS_Y = 6840;
-    constexpr double TOWEL_Y = 5200;//5240
+    constexpr double SEATS_Y = 6740;
+    constexpr double TOWEL_Y = 5240;
     constexpr double point[9][2][3] = {//赤　青
         {{300,NOMAL_Y,0},{-300,NOMAL_Y,0}},//ポール間に入る前
         {{1800,NOMAL_Y,0},{-1800,NOMAL_Y,0}},//ポール間に入る
@@ -208,12 +209,12 @@ int main(int argc,char **argv){
     };
     //rs_x,rs_y,lidar_fence,lidar_base,lidar_y
     constexpr double offset[6][2][5] = {//赤　青
-        {{816 ,3770,2865,1800,2950},{-878,3770,1990,315 ,2930}},//タオル１　予選 2870 340
-        {{680 ,3770,2750,1710,2950},{-737,3770,2130,390 ,2930}},//タオル１　決勝 3780
-        {{-420,3770,1685,660 ,2950},{422 ,3770,3225,1455,2950}},//タオル２　予選 3190 1430
+        {{816 ,3750,2865,1800,2950},{-878,3750,1990,315 ,2930}},//タオル１　予選 2870 340
+        {{680 ,3750,2750,1710,2950},{-737,3750,2130,390 ,2930}},//タオル１　決勝 3780
+        {{-420,3770,1685,660 ,2950},{422 ,3770,3210,1455,2950}},//タオル２　予選 3190 1430
         {{-695,3770,1430,390 ,2950},{660 ,3770,3350,1695,2950}},//タオル２　決勝
-        {{1010,2080,3080,2060,1420},{1018,2080,3840,2060,1420}},//シーツ 始め 3180 1370
-        {{-1050,2080,1075,0,1420},{-1050,2080,1850,0,1420}}//シーツ　終わり /2080
+        {{1010,2080,3080,2060,1440},{1018,2050,3840,2060,1440}},//シーツ 始め 3180 1370
+        {{-1050,2080,1075,0,1440},{-1000,2050,1800,0,1440}}//シーツ　終わり /2080
     };
     constexpr char coat_name[2][10] = {
         {"赤"},
@@ -471,7 +472,7 @@ int main(int argc,char **argv){
                 stm_auto = false;
                 //cmdnum(5,coat,VMAX[spreaded],AMAX[spreaded]);
                 setAuto(point[0][coat][0],point[0][coat][1],point[0][coat][2]);
-                fast_mode = false;//竿までの移動を早く
+                fast_mode = true;//竿までの移動を早く
                 status = 2;//pixyを使わない時
                 next_move = 2;
                 send_flag = false;
@@ -534,7 +535,7 @@ int main(int argc,char **argv){
                 stm_auto = false;
                 num = 4+2*bath+fight;
                 if(bath == 0){
-                    setAuto(point[num][coat][0],point[num][coat][1] + 150,point[num][coat][2]);
+                    setAuto(point[num][coat][0],point[num][coat][1] + 100,point[num][coat][2]);
                     towel_back = false;
                 }else{
                     setAuto(now_x/*point[num][coat][0]*/,NOMAL_Y,0);
@@ -567,8 +568,9 @@ int main(int argc,char **argv){
                     }
                 }
 
-                if(count_towel > 30){
+                if(count_towel > 50){
                     skip = true;
+                    ROS_INFO("バスタオルタイムアウト");
                     fprintf(fp,"バスタオル%dタイムアウト lidar(%d,%d),RS(%d,%d)\tG(%d,%d),N(%d,%d,%f)\n",bath+1,lidar_x,lidar_y,(int)rs_data_x,(int)rs_data_y,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,now_yaw);
                     break;
                 }else if(towel_x_ok && fabs(now_x - goal_x) < 40 && fabs(now_y - goal_y) < 40 && fabs(now_yaw) < 2){
@@ -585,7 +587,7 @@ int main(int argc,char **argv){
                 if(fabs(now_x - point[num+4][coat][0]) < 400 && !towel_y_ok && bath == 1){
                     //next_move = 7;
                     towel_y_ok = true;
-                    goal_y = TOWEL_Y + 150;
+                    goal_y = TOWEL_Y + 100;
                     auto_move = true;
                 }else if(fabs(goal_x - point[num+4][coat][0]) < 250 && fabs(now_yaw) < 2 && (!towel_x_ok/* || rs_data_x == 0*/)){
                     lidar_x_diff = (lidar_x - offset[num][coat][2]);//フェンス
@@ -720,6 +722,7 @@ int main(int argc,char **argv){
                     status = 12;
                     next_move = 12;
                     skip = true;
+                    ROS_INFO("シーツタイムアウト");
                     fprintf(fp,"シーツタイムアウト lidar(%d,%d) RS_Y:%d,X:%d\tnow(%d,%d,%f)\n",lidar_x,lidar_y,(int)rs_data_y,(int)rs_data_x,(int)now_x,(int)now_y,now_yaw);
                     break;
                 }else if(fabs(now_x - goal_x) < 50 && fabs(now_y - goal_y) < 50 && spreaded == 2){
@@ -732,7 +735,7 @@ int main(int argc,char **argv){
                     rs_goal_x = offset[4][coat][0];
                 }
                 if(limit_left){
-                    if((goal_y - now_y) < 20 && spreaded == 2){
+                    if(fabs(goal_y - now_y) < 20 && spreaded == 2){
                         status = 12;
                         next_move = 12;
                         skip = true;
@@ -806,7 +809,7 @@ int main(int argc,char **argv){
                 count = 0;
                 break;
             case 14://補正動作
-                if(count < 50/* && fabs(now_y - goal_y) > 40*/){
+                if(count < 70 && fabs(now_x - goal_x) > 500){
                     count++;
                     fprintf(fp,"干し右よけ待ち RS_X:%d,%d\tG(%d,%d),N(%d,%d)\tlidar(%d,%d)\n",(int)rs_data_x,(int)rsx_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,lidar_x,lidar_y);
                     break;
@@ -817,7 +820,7 @@ int main(int argc,char **argv){
                 }
 
                 if(limit_right){
-                    goal_x = now_x - 100;
+                    goal_x = now_x - 10;
                     skip = true;
                     status = 15;
                     fprintf(fp,"シーツリミット右 lidar(%d,%d)\tnow(%d,%d,%f)\n",lidar_x,lidar_y,(int)now_x,(int)now_y,now_yaw);
@@ -1047,18 +1050,24 @@ void operate(const std_msgs::Float32MultiArray &data){
 
 inline void autoMove(){
     constexpr double A_MAX_LOOP[3] = {AMAX[0] / LOOP_RATE,AMAX[1] / LOOP_RATE,AMAX[2] / LOOP_RATE};
+    constexpr double JARK_LOOP[3] = {JARK[0] / LOOP_RATE,JARK[1] / LOOP_RATE,JARK[2] / LOOP_RATE};
     constexpr double Kp  = 2.5; //自動移動//2.8
     constexpr double Ki[2]  = {2.5,4.5};//0.0004//2.5 4.5
     constexpr double Kd  = 0.01;//0.0006
     static double xKi = Ki[0],yKi = Ki[0];
+    static double arc_diff,arc_max;
     static double send_v_x,send_v_y,send_omega;
     static double pid_v_x,pid_v_y,pid_omega;
     static double diff_x,diff_y,diff_yaw;
     static double diff_v_x,diff_v_y,diff_omega;
     static double errer_x,errer_y,errer_omega;
-    static double use_v_max;
+    static double use_v_max = 0;
+    static double use_a_x,use_a_y;
     if(use_v_max != (fast_mode ? FAST_V : VMAX[spreaded])){
         use_v_max = (fast_mode ? FAST_V : VMAX[spreaded]);
+        arc_diff = M_PI / use_v_max;
+        arc_max = 2.6 / M_PI * use_v_max;// 1300 / 500
+        ROS_INFO("VMAX:%d",(int)use_v_max);
     }
     if(move_data.data.size() != 4){
         move_data.data.resize(4);
@@ -1088,13 +1097,16 @@ inline void autoMove(){
         std::cout << "yKi 0" << std::endl;
     }
 
-    pid_v_x = constrain(diff_x * Kp + errer_x * xKi - diff_v_x * Kd,-use_v_max,use_v_max);
+    pid_v_x = constrain(arc_max * atan(arc_diff * diff_x) + errer_x * xKi - diff_v_x * Kd,-use_v_max,use_v_max);
+    //pid_v_x = constrain(diff_x * Kp + errer_x * xKi - diff_v_x * Kd,-use_v_max,use_v_max);
     if(fabs(pid_v_x) >= fabs(send_v_x)){
-        if(fabs(send_v_x - pid_v_x) > A_MAX_LOOP[spreaded]){
-            send_v_x += (pid_v_x >= 0 ? 1 : -1)*A_MAX_LOOP[spreaded];
+        use_a_x = std::min(use_a_x + JARK_LOOP[spreaded],A_MAX_LOOP[spreaded]);
+        if(fabs(send_v_x - pid_v_x) > use_a_x){
+            send_v_x += (pid_v_x >= 0 ? 1 : -1)*use_a_x;
         }else{
             send_v_x = pid_v_x;
         }
+        errer_x = 0;
         diff_v_x = 0;
     }else{
         if(fabs(diff_x) < 180){
@@ -1104,6 +1116,7 @@ inline void autoMove(){
             errer_x = 0;
             diff_v_x = 0;
         }
+        use_a_x = 0;
         send_v_x = pid_v_x;
     }/*
     if(fabs(diff_x) < 180){
@@ -1112,13 +1125,16 @@ inline void autoMove(){
         errer_x = 0;
     }*/
 
-    pid_v_y = constrain(diff_y * Kp + errer_y * yKi - diff_v_y * Kd,-use_v_max,use_v_max);
+    pid_v_y = constrain(arc_max * atan(arc_diff * diff_y) + errer_y * yKi - diff_v_y * Kd,-use_v_max,use_v_max);
+    //pid_v_y = constrain(diff_y * Kp + errer_y * yKi - diff_v_y * Kd,-use_v_max,use_v_max);
     if(fabs(pid_v_y) >= fabs(send_v_y)){
-        if(fabs(send_v_y - pid_v_y) > A_MAX_LOOP[spreaded]){
-            send_v_y += (pid_v_y >= 0 ? 1 : -1)*A_MAX_LOOP[spreaded];
+        use_a_y = std::min(use_a_y + JARK_LOOP[spreaded],A_MAX_LOOP[spreaded]);
+        if(fabs(send_v_y - pid_v_y) > use_a_y){
+            send_v_y += (pid_v_y >= 0 ? 1 : -1)*use_a_y;
         }else{
             send_v_y = pid_v_y;
         }
+        errer_y = 0;
         diff_v_y = 0;
     }else{
         if(fabs(diff_y) < 180){
@@ -1128,6 +1144,7 @@ inline void autoMove(){
             errer_y = 0;
             diff_v_y = 0;
         }
+        use_a_y = 0;
         send_v_y = pid_v_y;
     }/*
     if(fabs(diff_y) < 180){
@@ -1149,7 +1166,7 @@ inline void autoMove(){
         errer_omega += -diff_yaw / LOOP_RATE;
     }
 
-    if((fabs(diff_x) < 20 && fabs(diff_y) < 20 && fabs(diff_yaw) < 1
+    if((fabs(diff_x) <  10 && fabs(diff_y) < 10 && fabs(diff_yaw) < 1
                 && fabs(now_v_x) < 15 && fabs(now_v_y) < 15 && fabs(now_omega) < 0.02) || skip){
         send_v_x = 0;
         send_v_y = 0;

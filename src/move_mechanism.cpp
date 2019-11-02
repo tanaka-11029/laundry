@@ -38,11 +38,11 @@ void runFunc(const std_msgs::Int32 &data){
             //for(int i = 0;i < 2;i++){
                 waitMove(1);
                 sendSerial(17,7,1);
-                waitMove(10);
+                waitMove(5);
                 sendSerial(17,6,1);
-                waitMove(10);
+                waitMove(8);
                 sendSerial(17,7,-1);
-                waitMove(10);
+                waitMove(5);
                 sendSerial(17,6,-1);
             //}
             break;
@@ -51,11 +51,11 @@ void runFunc(const std_msgs::Int32 &data){
             //for(int i = 0;i < 2;i++){
                 waitMove(1);
                 sendSerial(17,7,2);
-                waitMove(10);
+                waitMove(5);
                 sendSerial(17,6,2);
-                waitMove(10);
+                waitMove(8);
                 sendSerial(17,7,-2);
-                waitMove(10);
+                waitMove(5);
                 sendSerial(17,6,-2);
             //}
             loop_rate->sleep();
