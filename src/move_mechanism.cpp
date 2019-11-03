@@ -67,7 +67,7 @@ void runFunc(const std_msgs::Int32 &data){
             sendSerial(1,4,1);
             waitMove(10);
             sendSerial(1,5,1);
-            waitMove(40);
+            waitMove(15);
             sendSerial(1,5,-1);
             break;
         case 4://シーツ終わり
