@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -20,10 +21,10 @@
 //using std::fabs;
 
 constexpr int LOOP_RATE  = 25;
-constexpr double AMAX[3] = {1000,1000,150}; // mm/s/s
+constexpr double AMAX[3] = {1000,1000,300}; // mm/s/s
 constexpr double FAST_V = 1800;
 constexpr double JARK[3] = {100,100,100}; //mm/s/s/s
-constexpr double VMAX[3] = {1200,1200,500}; // mm/s
+constexpr double VMAX[3] = {1200,1200,600}; // mm/s
 std_msgs::Float32MultiArray move_data;
 cs_connection::PrintStatus send_status;
 ros::Publisher motor;
@@ -48,6 +49,8 @@ bool rs_use = false;
 bool ready = false;
 bool fast_mode = false;
 bool stopped = false;
+bool sheet_first = false;
+bool towel_switch = false;
 int spreaded = 0;
 int stm_status = 0;
 int status = 0;
@@ -105,10 +108,18 @@ void getResponse(const std_msgs::Int32 &data){
         }
         switch (data.data){
             case 1://タオル１
-                towel[0] = false;
+                if(towel_switch){
+                    towel[1] = false;
+                }else{
+                    towel[0] = false;
+                }
                 break;
             case 2://タオル２
-                towel[1] = false;
+                if(towel_switch){
+                    towel[0] = false;
+                }else{
+                    towel[1] = false;
+                }
                 break;
             case 3://シーツ始め
                 break;
@@ -136,10 +147,10 @@ void getRsmsg(const cs_connection::RsDataMsg &data){
     rs_data_z = data.z_distance;
     if(rs_use){
         rs_data = true;
-        rsy_diff = (rs_data_y - rs_goal_y) * 0.8;
-        tmp_goal_y = now_y + rsy_diff;
-        rsx_diff = (rs_data_x - rs_goal_x) * 0.9;
-        tmp_goal_x = now_x + rsx_diff;
+        rsy_diff = rs_data_y - rs_goal_y;
+        tmp_goal_y = now_y + (rsy_diff * 0.8);
+        rsx_diff = rs_data_x - rs_goal_x;
+        tmp_goal_x = now_x + (rsx_diff * 0.9);
     }
     if(rs_count != 0){
         rs_count = 0;
@@ -212,9 +223,9 @@ int main(int argc,char **argv){
     constexpr double offset[6][2][5] = {//赤　青
         {{816 ,3750,2865,1800,2950},{-878,3750,1990,315 ,2930}},//タオル１　予選 2870 340
         {{680 ,3750,2750,1710,2950},{-710,3750,2130,390 ,2930}},//タオル１　決勝 3780
-        {{-420,3770,1685,660 ,2950},{422 ,3770,3190,1455,2950}},//タオル２　予選 3190 1430
+        {{-420,3770,1690,670 ,2950},{422 ,3770,3200,1455,2950}},//タオル２　予選 3190 1430
         {{-695,3770,1430,390 ,2950},{660 ,3770,3470,1695,2950}},//タオル２　決勝
-        {{1010,2030,3080,2060,1440},{1018,2030,3880,2060,1440}},//シーツ 始め 3180 1370
+        {{1010,2030,3110,2060,1440},{1018,2030,3880,2060,1440}},//シーツ 始め 3180 1370
         {{-1050,2030,1075,0,1440},{-1000,2030,1800,0,1440}}//シーツ　終わり /2080
     };
     constexpr char coat_name[2][10] = {
@@ -514,20 +525,37 @@ int main(int argc,char **argv){
                 }
                 break;
             case 4://次の動き選択
-                if(towel[0]){
-                    status = 5;//タオル１
-                    bath = false;
-                }else if(towel[1]){
-                    status = 5;//タオル２
-                    bath = true;
-                }else if(seats){
-                    status = 9;//シーツ
+                towel_switch = false;//デフォルト状態　trueでタオルを逆にする
+                if(sheet_first && fight == 1){
+                    if(seats){
+                        towel_switch = true;//決勝でシーツ先の時はタオルが逆になる
+                        status = 9;//シーツ
+                    }else if(towel[0]){
+                        status = 5;//タオル１
+                        bath = false;
+                    }else if(towel[1]){
+                        status = 5;//タオル２
+                        bath = true;
+                    }else{
+                        status = 16;//帰る
+                    }
                 }else{
-                    status = 15;//帰る
+                    if(towel[0]){
+                        status = 5;//タオル１
+                        bath = false;
+                    }else if(towel[1]){
+                        status = 5;//タオル２
+                        bath = true;
+                    }else if(seats){
+                        status = 9;//シーツ
+                    }else{
+                        status = 16;//帰る
+                    }
                 }
                 break;
             case 5://バスタオルを干す位置に移動する
-                if(fight == 0 && bath == 0){//移動しながら展開
+                if(towel_switch){//タオルを逆にしているときは何もしない。
+                }else if(fight == 0 && bath == 0){//移動しながら展開
                     //sendSerial(1,2,0);
                     sendMechanism(8);
                 }else{
@@ -536,7 +564,7 @@ int main(int argc,char **argv){
                 }
                 stm_auto = false;
                 num = 4+2*bath+fight;
-                if(bath == 0){
+                if((bath == 0 && !towel_switch) || (bath == 1 && towel_switch)){
                     setAuto(point[num][coat][0],point[num][coat][1] + 100,point[num][coat][2]);
                     towel_back = false;
                 }else{
@@ -672,7 +700,11 @@ int main(int argc,char **argv){
                     //バスタオルノード起動
                     now_t = time(nullptr);
                     fprintf(fp,"バスタオル%d lidar(%d,%d) RS_Y:%d,X:%d\tnow(%f,%f,%f)\t%ld\n",bath+1,lidar_x,lidar_y,(int)rs_data_y,(int)rs_data_x,now_x,now_y,now_yaw,now_t - start_t);
-                    sendMechanism(bath+1);
+                    if(towel_switch){
+                        sendMechanism((!bath)+1);
+                    }else{
+                        sendMechanism(bath+1);
+                    }
                     next_move = 8;
                     status = 0;
                 }else{
@@ -680,11 +712,18 @@ int main(int argc,char **argv){
                 }
                 break;
             case 8://次の動きの選択
-                if(bath){
+                if(towel_switch){
+                    if(bath && towel[0]){
+                        bath = false;
+                        status = 5;//タオル１
+                    }else{
+                        status = 16;//帰る
+                    }
+                }else if(bath){
                     if(seats){
                         status = 9;//シーツ
                     }else{
-                        status = 15;//帰る
+                        status = 16;//帰る
                     }
                 }else{
                     if(towel[1]){
@@ -693,7 +732,7 @@ int main(int argc,char **argv){
                     }else if(seats){
                         status = 9;//シーツ
                     }else{
-                        status = 15;//帰る
+                        status = 16;//帰る
                     }
                 }
                 break;
@@ -717,7 +756,7 @@ int main(int argc,char **argv){
                 break;
             case 11://補正動作
                 if(towel_back){//一定分まっすぐ後ろに下がる
-                    if(now_y > (TOWEL_Y + 200)){
+                    if(now_y > (TOWEL_Y + 100)){
                         goal_x = point[2][coat][0] + 50;
                         towel_back = false;
                         auto_move = true;
@@ -727,7 +766,7 @@ int main(int argc,char **argv){
                     }
                 }
 
-                if(count > 30){
+                if(count > 50){
                     status = 12;
                     next_move = 12;
                     skip = true;
@@ -744,7 +783,7 @@ int main(int argc,char **argv){
                     rs_goal_x = offset[4][coat][0];
                 }
                 if(limit_left){
-                    if(fabs(goal_y - now_y) < 30 && spreaded == 2){
+                    if((rs_data_y == 0 || fabs(rsy_diff) < 20) && fabs(goal_y - now_y) < 20 && spreaded == 2){
                         status = 12;
                         next_move = 12;
                         skip = true;
@@ -767,8 +806,9 @@ int main(int argc,char **argv){
                     goal_x = now_x + lidar_x_diff;
                     fprintf(fp,"シーツ補正X lidar(%d,%d),%d\tG(%d,%d),N(%d,%d)\tRS(%d,%d)\n",lidar_x,lidar_y,lidar_x_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,(int)rs_data_x,(int)rs_data_y);
                 }
-                if(spreaded != 2 && wait_num == 0 && fabs(now_y - goal_y) < 50 && fabs(now_x - goal_x) < 30){
+                if(spreaded != 2 && wait_num == 0 && fabs(now_y - goal_y) < 50 && fabs(now_x - goal_x) < 50){
                     sendMechanism(6);//ある程度の場所に行ってから展開
+                    now_t = time(nullptr);
                     fprintf(fp,"展開２ lidar(%d,%d) now(%f,%f,%f)\tRS(%d,%d)\t%ld\n",lidar_x,lidar_y,now_x,now_y,now_yaw,(int)rs_data_x,(int)rs_data_y,now_t - start_t);
                     if(rs_data){
                         rs_data = false;
@@ -884,17 +924,31 @@ int main(int argc,char **argv){
                 status = 17;
                 break;
             case 17://帰り準備
-                if(now_y < NOMAL_Y + 450){
+                if(now_y < NOMAL_Y + 450 && now_y > TOWEL_Y + 200){
                     sendSerial(1,5,-2);//端をつかむソレノイドを開放する
-                    next_move = 18;
+                    if(sheet_first){
+                        if(towel[1]){
+                            status = 5;//タオル２
+                            next_move = 5;
+                            bath = true;
+                            towel_switch = true;
+                        }else if(towel[0]){
+                            status = 5;//タオル１
+                            next_move = 5;
+                            bath = false;
+                            towel_switch = true;
+                        }else{
+                            status = 18;//帰る
+                            next_move = 18;
+                        }
+                    }else{
+                        next_move = 18;
+                        status = 18;
+                    }
                     if(spreaded > 0 /*&& false*/){
                         now_t = time(nullptr);
                         fprintf(fp,"帰り準備 now(%f,%f,%f)\t%ld\n",now_x,now_y,now_yaw,now_t - start_t);
                         sendMechanism(7);//圧縮動作
-                        status = 0;
-                        next_move = 18;
-                    }else{
-                        status = 18;
                     }
                 }
                 break;
@@ -908,7 +962,7 @@ int main(int argc,char **argv){
 
                 stm_auto = false;
                 //cmdnum(5,-1,VMAX[spreaded],AMAX[spreaded]);
-                setAuto(point[8][coat][0],now_y/*point[8][coat][1]*/,point[8][coat][2]);
+                setAuto(point[8][coat][0],std::max(now_y,NOMAL_Y)/*point[8][coat][1]*/,point[8][coat][2]);
                 status = 19;
                 next_move = 19;
                 break;

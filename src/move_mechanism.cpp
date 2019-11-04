@@ -58,8 +58,8 @@ void runFunc(const std_msgs::Int32 &data){
                 waitMove(5);
                 sendSerial(17,6,-2);
             //}
-            loop_rate->sleep();
-            sendSerial(1,2,0);
+            //loop_rate->sleep();
+            //sendSerial(1,2,0);
             break;
         case 3://シーツはじめ
             //sendSerial(1,5,2);

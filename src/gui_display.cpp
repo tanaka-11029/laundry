@@ -285,7 +285,6 @@ int main(int argc, char **argv){
     data_flame[17] = gtk_frame_new("Lidar_Y");
     data_flame[18] = gtk_frame_new("機構");
     data_flame[19] = gtk_frame_new("unused");
-    data_flame[20] = gtk_frame_new("unused");
     for(int i = 0;i < 20;i++){
         data_text[i] = gtk_label_new("0.000000");//input上でデータを表示する
         gtk_frame_set_shadow_type(GTK_FRAME(data_flame[i]),GTK_SHADOW_ETCHED_IN);
