@@ -209,10 +209,10 @@ int main(int argc,char **argv){
     constexpr double SEATS_Y = 6740;
     constexpr double TOWEL_Y = 5240;
     constexpr double point[9][2][3] = {//赤　青
-        {{300,NOMAL_Y,0},{-300,NOMAL_Y,0}},//ポール間に入る前
+        {{500,NOMAL_Y,0},{-500,NOMAL_Y,0}},//ポール間に入る前
         {{1800,NOMAL_Y,0},{-1800,NOMAL_Y,0}},//ポール間に入る
-        {{1680,SEATS_Y - 400,0},{-3740,SEATS_Y - 400,0}},//シーツかけ始め 1830
-        {{3880,SEATS_Y,0},{-1650,SEATS_Y,0}},//シーツかけ終わり
+        {{1680,SEATS_Y - 300,0},{-3740,SEATS_Y - 300,0}},//シーツかけ始め 1830
+        {{3760,SEATS_Y,0},{-1650,SEATS_Y,0}},//シーツかけ終わり
         {{1950,TOWEL_Y,0},{-2020,TOWEL_Y,0}},//タオル１予選４1980 2750 2000
         {{1920,TOWEL_Y,0},{-2130,TOWEL_Y,0}},//タオル１決勝 2180 2090
         {{3140,TOWEL_Y,0},{-3190,TOWEL_Y,0}},//タオル２予選６3300 3550 3020
@@ -528,7 +528,9 @@ int main(int argc,char **argv){
                 towel_switch = false;//デフォルト状態　trueでタオルを逆にする
                 if(sheet_first && fight == 1){
                     if(seats){
-                        towel_switch = true;//決勝でシーツ先の時はタオルが逆になる
+                        if(coat == 0){
+                            towel_switch = true;//決勝でシーツ先の時はタオルが逆になる
+                        }
                         status = 9;//シーツ
                     }else if(towel[0]){
                         status = 5;//タオル１
@@ -554,7 +556,7 @@ int main(int argc,char **argv){
                 }
                 break;
             case 5://バスタオルを干す位置に移動する
-                if(towel_switch){//タオルを逆にしているときは何もしない。
+                if(sheet_first && fight == 1){//タオルを逆にしているときは何もしない。
                     if(wait_num != 0 || spreaded != 1){
                         //fprintf(fp,"シーツ後展開さがり待ち lidar(%d,%d),%d\tG(%d,%d),N(%d,%d,%f)\tRS(%d,%d)\n",lidar_x,lidar_y,lidar_x_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,now_yaw,(int)rs_data_x,(int)rs_data_y);
                         //break;
@@ -569,7 +571,7 @@ int main(int argc,char **argv){
                 stm_auto = false;
                 num = 4+2*bath+fight;
                 if((bath == 0 && !towel_switch) || (bath == 1 && towel_switch)){
-                    setAuto(point[num][coat][0],point[num][coat][1] + 100,point[num][coat][2]);
+                    setAuto(point[num][coat][0],point[num][coat][1] + 100 + (spreaded == 2)*100,point[num][coat][2]);
                     towel_back = false;
                 }else{
                     setAuto(now_x/*point[num][coat][0]*/,NOMAL_Y,0);
@@ -615,16 +617,16 @@ int main(int argc,char **argv){
                 }
 
                 now_t = time(nullptr);
-                if(!towel_y_ok && spreaded == 1 && towel_switch && fabs(now_x - point[num+4][coat][0]) < 400){
+                if(!towel_y_ok && spreaded == 1 && wait_num == 0 && sheet_first && fight && fabs(now_x - point[num+4][coat][0]) < 400){
                     towel_y_ok = true;
                     goal_y = TOWEL_Y + 100;
                     auto_move = true;
                 }
-                if(!towel_y_ok && fabs(goal_x - now_x) < 300 && fabs(goal_y - now_y) < 300 && bath == 0 && !towel_switch){
+                if(!towel_y_ok && fabs(goal_x - now_x) < 300 && fabs(goal_y - now_y) < 300 && bath == 0 && (!sheet_first || !fight )){
                     towel_y_ok = true;
                     auto_move = true;
                 }
-                if(fabs(now_x - point[num+4][coat][0]) < 400 && !towel_y_ok && bath == 1 && !towel_switch){
+                if(fabs(now_x - point[num+4][coat][0]) < 400 && !towel_y_ok && bath == 1 && (!sheet_first || !fight)){
                     //next_move = 7;
                     towel_y_ok = true;
                     goal_y = TOWEL_Y + 100;
@@ -839,7 +841,7 @@ int main(int argc,char **argv){
                         goal_y = SEATS_Y;
                         fprintf(fp,"シーツ　RS無視 RS_Y:%d,%d,%d X:%d\tlidar_y:%d,%d\n",(int)rs_data_y,(int)rsy_diff,(int)tmp_goal_y,(int)rs_data_x,lidar_y,lidar_y_diff);
                     }
-                    if(goal_y == (SEATS_Y - 400)){
+                    if(goal_y == (SEATS_Y - 300)){
                         goal_y = SEATS_Y;
                     }
                     next_move = 12;
@@ -936,21 +938,40 @@ int main(int argc,char **argv){
                 if(now_y < NOMAL_Y + 450 && now_y > TOWEL_Y + 200){
                     sendSerial(1,5,-2);//端をつかむソレノイドを開放する
                     if(sheet_first){//シーツを先にした時にタオルを干しに行く
-                        if(towel[1]){
-                            status = 5;//タオル２
-                            next_move = 5;
-                            bath = true;
-                            towel_switch = true;
-                            goal_y = NOMAL_Y + 100;
-                        }else if(towel[0]){
-                            status = 5;//タオル１
-                            next_move = 5;
-                            bath = false;
-                            towel_switch = true;
-                            goal_y = NOMAL_Y + 100;
+                        if(coat){
+                            if(towel[0]){
+                                status = 5;//タオル２
+                                next_move = 5;
+                                bath = false;
+                                towel_switch = false;
+                                goal_y = NOMAL_Y + 200;
+                            }else if(towel[1]){
+                                status = 5;//タオル１
+                                next_move = 5;
+                                bath = true;
+                                towel_switch = false;
+                                goal_y = NOMAL_Y + 200;
+                            }else{
+                                status = 18;//帰る
+                                next_move = 18;
+                            }
                         }else{
-                            status = 18;//帰る
-                            next_move = 18;
+                            if(towel[1]){
+                                status = 5;//タオル２
+                                next_move = 5;
+                                bath = true;
+                                towel_switch = true;
+                                goal_y = NOMAL_Y + 200;
+                            }else if(towel[0]){
+                                status = 5;//タオル１
+                                next_move = 5;
+                                bath = false;
+                                towel_switch = true;
+                                goal_y = NOMAL_Y + 200;
+                            }else{
+                                status = 18;//帰る
+                                next_move = 18;
+                            }
                         }
                     }else{
                         next_move = 18;
