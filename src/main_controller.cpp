@@ -22,7 +22,7 @@
 
 constexpr int LOOP_RATE  = 25;
 constexpr double AMAX[3] = {1000,1000,300}; // mm/s/s
-constexpr double FAST_V = 1800;
+constexpr double FAST_V = 2000;
 constexpr double JARK[3] = {100,100,100}; //mm/s/s/s
 constexpr double VMAX[3] = {1500,1500,600}; // mm/s
 std_msgs::Float32MultiArray move_data;
@@ -491,9 +491,33 @@ int main(int argc,char **argv){
                 //send_flag = false;
                 break;
             case 2://ポール間に移動
-                if(now_y > (NOMAL_Y - 700)){
+                if(now_y > (NOMAL_Y - 600)){
                     stm_auto = false;
-                    setAuto(point[1][coat][0],point[1][coat][1],point[1][coat][2]);
+                    if(sheet_first && fight == 1){
+                        if(seats){
+                            if(coat == 0){
+                                towel_switch = true;//決勝でシーツ先の時はタオルが逆になる
+                            }
+                            num = 2;//シーツ
+                        }else if(towel[0]){
+                            num = 4 + fight;//タオル１
+                        }else if(towel[1]){
+                            num = 6 + fight;//タオル２
+                        }else{
+                            num = 1;//帰る
+                        }
+                    }else{
+                        if(towel[0]){
+                            num = 4 + fight;//タオル１
+                        }else if(towel[1]){
+                            num = 6 + fight;//タオル２
+                        }else if(seats){
+                            num = 2;//シーツ
+                        }else{
+                            num = 1;//帰る
+                        }
+                    }
+                    setAuto(point[num][coat][0],point[1][coat][1],point[1][coat][2]);
                     fast_mode = false;//微調整は遅めに
                     next_move = 3;
                     status = 3;//pixyを使わない時
@@ -1070,7 +1094,7 @@ void operate(const std_msgs::Float32MultiArray &data){
             sendSerial(255,255,0);
             break;
         case -5://スタート
-            if(spreaded != 1){
+            if(spreaded != 1){//準備動作
                 if(fight){
                     sendSerial(1,2,1);
                 }else{
@@ -1087,7 +1111,7 @@ void operate(const std_msgs::Float32MultiArray &data){
                 if(moving){
                     auto_move = true;
                 }
-            }else{
+            }else if(towel[0] || towel[1] || seats){//フラグなしの時は動かさない
                 status = 1;
             }
             ready = false;
