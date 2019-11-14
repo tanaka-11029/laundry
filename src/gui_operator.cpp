@@ -641,8 +641,6 @@ int main(int argc, char **argv){
     GtkWidget* vbigbox;
     GtkWidget* hbigbox;
 
-    GtkWidget* data_flame[20];
-
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);//Windowの描画
     gtk_window_set_position(GTK_WINDOW(window),GTK_WIN_POS_CENTER);
     gtk_window_set_title(GTK_WINDOW(window),"GUI Operator");

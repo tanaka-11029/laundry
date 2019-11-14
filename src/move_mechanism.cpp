@@ -79,14 +79,14 @@ void runFunc(const std_msgs::Int32 &data){
             if(spread != 1){
                 sendSerial(1,3,1);
                 //sendSerial(1,6,1);
-                waitMove(10);
+                waitMove(20);
             }
             break;
         case 6://展開２
             if(spread != 2){
                 sendSerial(1,3,2);
                 //sendSerial(1,6,2);
-                waitMove(10);
+                waitMove(20);
             }
             break;
         case 7://収納
