@@ -18,7 +18,7 @@ int spread = 0;
 int stm_status = 0;
 
 inline void sendSerial(uint8_t id,uint8_t cmd,int16_t data);
-inline void waitMove(int wait = 10);
+inline void waitMove(int wait = 10, int timeout = 50);
 
 void runFunc(const std_msgs::Int32 &data){
     if(data.data == 0){
@@ -79,32 +79,44 @@ void runFunc(const std_msgs::Int32 &data){
             if(spread != 1){
                 sendSerial(1,3,1);
                 //sendSerial(1,6,1);
-                waitMove(20);
+                waitMove(20,0);
             }
             break;
         case 6://展開２
             if(spread != 2){
                 sendSerial(1,3,2);
                 //sendSerial(1,6,2);
-                waitMove(20);
+                waitMove(20,0);
             }
             break;
         case 7://収納
-            waitMove(5);
+            waitMove(5,5);
             if(spread == 2){
                 sendSerial(1,3,1);
                 //sendSerial(1,6,0);
             }
-            waitMove(20);
+            waitMove(20,0);
             sendSerial(1,4,0);
             break;
         case 8:
             sendSerial(1,2,0);
-            waitMove(10);
+            waitMove(10,0);
             break;
         case 9:
             sendSerial(1,2,1);
-            waitMove(10);
+            waitMove(10,0);
+            break;
+        case 10://予選準備
+            sendSerial(1,3,1);
+            waitMove(2,2);
+            sendSerial(1,2,0);
+            waitMove(20,0);
+            break;
+        case 11://決勝準備
+            sendSerial(1,3,1);
+            waitMove(2,2);
+            sendSerial(1,2,1);
+            waitMove(20,0);
             break;
         default:
             skip = true;
@@ -118,14 +130,14 @@ void runFunc(const std_msgs::Int32 &data){
     ros::spinOnce();
 }
 
-inline void waitMove(int wait){
+inline void waitMove(int wait, int timeout){
     count = 0;
     while(ros::ok() && !skip){
         ros::spinOnce();
         loop_rate->sleep();
         count++;
         if(count < wait){
-        }else if(stm_status == 0 ||( count > 80 && (mode == 1 || mode == 2))){
+        }else if(stm_status == 0 ||(count > timeout && timeout != 0)){
             count = 0;
             break;
         }
