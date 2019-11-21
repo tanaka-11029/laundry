@@ -388,13 +388,8 @@ void button_click(GtkWidget* widget,gpointer data){
                 ready = false;
                 if(setup_move){
                     setup_move = false;
-                    if(fight){
-                        sendSerial(1,2,1);
-                    }else{
-                        sendSerial(1,2,0);
-                    }
                     gtk_label_set_markup(GTK_LABEL(STATUS),status_msg[10]);//展開動作
-                    wait_num = 5;
+                    wait_num = 10+fight;
                     mechanism_data.data = wait_num;
                     mechanism.publish(mechanism_data);
                 }else if(only_move){
