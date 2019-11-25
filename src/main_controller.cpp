@@ -225,9 +225,9 @@ int main(int argc,char **argv){
     //rs_x,rs_y,lidar_fence,lidar_base,lidar_y
     constexpr double offset[6][2][5] = {//赤　青
         {{793 ,3710,2925,1820,2950},{-845,3610,2010,390 ,2950}},//タオル１　予選 2870 340 3750
-        {{640 ,3700,2755,1700,2950},{-740,3610,2110,440 ,2950}},//タオル１　決勝 2175
-        {{-436,3710,1690,670 ,2970},{352 ,3730,3195,1455,2970}},//タオル２　予選 3190 1430 1710
-        {{-730,3710,1445,390 ,2970},{642 ,3730,3475,1695,2970}},//タオル２　決勝
+        {{640 ,3700,2755,1700,2945},{-740,3610,2110,440 ,2945}},//タオル１　決勝 2175
+        {{-436,3710,1690,670 ,2955},{352 ,3730,3195,1455,2955}},//タオル２　予選 3190 1430 1710
+        {{-730,3710,1445,390 ,2955},{642 ,3730,3475,1695,2955}},//タオル２　決勝
         {{1000,2070,3110,2060,1440},{1000,2070,3830,2060,1440}},//シーツ 始め 3180 1370
         {{-1050,2070,1100,0,1440},{-1015,2070,1780,0,1440}}//シーツ　終わり /2080
     };
@@ -737,7 +737,7 @@ int main(int argc,char **argv){
                     }
                     fprintf(fp,"バスタオル%d補正X OK lidar(%d,%d),RS(%d,%d),%d\tG(%d,%d),N(%d,%d,%f)\n",bath+1,lidar_x,lidar_y,(int)rs_data_x,(int)rs_data_y,(int)rsx_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,now_yaw);
                 }else if(towel_x_ok){
-                    lidar_y_diff = (lidar_y - offset[0][0][4]);
+                    lidar_y_diff = (lidar_y - offset[num][coat][4]);
                     if(fabs(lidar_y_diff) < 200 /*&& fabs(now_y - goal_y) < 200*/ && (now_y - TOWEL_Y) > -250 && fabs(now_yaw) < 2){
                         goal_y = now_y + lidar_y_diff;
                         fprintf(fp,"バスタオル%d補正Y lidar(%d,%d),%d\tG(%d,%d),N(%d,%d,%f)\tRS(%d,%d)\n",bath+1,lidar_x,lidar_y,lidar_y_diff,(int)goal_x,(int)goal_y,(int)now_x,(int)now_y,now_yaw,(int)rs_data_x,(int)rs_data_y);
